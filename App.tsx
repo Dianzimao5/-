@@ -200,14 +200,27 @@ export default function App() {
   }, [savedWorlds, currentWorld.id]);
 
   const resetSystem = () => {
+    // 1. Preserve API settings
+    const currentConf = JSON.parse(localStorage.getItem('omni_conf_v1') || '{}');
+    const apiSettings = {
+        apiKey: currentConf.apiKey || '',
+        apiEndpoint: currentConf.apiEndpoint || DEFAULT_APP_CONFIG.apiEndpoint,
+        provider: currentConf.provider || DEFAULT_APP_CONFIG.provider,
+        model: currentConf.model || DEFAULT_APP_CONFIG.model
+    };
+
+    // 2. Clear all data
     localStorage.clear();
-    setConfig(DEFAULT_APP_CONFIG);
-    setUiThemes(PRESET_THEMES);
-    setSavedWorlds([DEFAULT_WORLD]);
-    setCurrentWorld(DEFAULT_WORLD);
-    setAssistant(DEFAULT_ASSISTANT);
-    setInstalledApps(['assistant', 'chat', 'worldbook', 'settings', 'store']);
-    setActiveApp(null);
+
+    // 3. Restore API settings to default config
+    const restoredConfig = {
+        ...DEFAULT_APP_CONFIG,
+        ...apiSettings
+    };
+    localStorage.setItem('omni_conf_v1', JSON.stringify(restoredConfig));
+
+    // 4. Reload to apply cleanly
+    window.location.reload();
   };
 
   const currentTheme = uiThemes[config.theme] || PRESET_THEMES.simple;

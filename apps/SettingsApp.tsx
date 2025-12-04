@@ -68,14 +68,21 @@ const SettingsApp: React.FC<Props> = ({ config, setConfig, theme, uiThemes, setU
   // --- System Management ---
 
   const handleExportAll = () => {
-    const keys = ['omni_conf_v1', 'omni_themes_v1', 'omni_worlds_v1', 'omni_assist_v1', 'omni_contacts', 'omni_groups', 'omni_chats', 'omni_msgs_system'];
-    const backup: Record<string, any> = {};
+    const keys = ['omni_conf_v1', 'omni_themes_v1', 'omni_worlds_v1', 'omni_assist_v1', 'omni_contacts', 'omni_groups', 'omni_chats', 'omni_msgs_system', 'omni_installed_apps'];
+    const payload: Record<string, any> = {};
     keys.forEach(k => {
         const v = localStorage.getItem(k);
-        if (v) backup[k] = JSON.parse(v);
+        if (v) payload[k] = JSON.parse(v);
     });
-    // Include current state just in case
-    backup['timestamp'] = new Date().toISOString();
+    
+    // Wrapped standard format
+    const backup = {
+        type: 'omni_backup_v1',
+        timestamp: new Date().toISOString(),
+        version: '0.5.0',
+        payload: payload
+    };
+
     downloadJson(backup, `OmniTerminal_Backup_${new Date().toISOString().slice(0,10)}.omni`);
   };
 
@@ -86,15 +93,26 @@ const SettingsApp: React.FC<Props> = ({ config, setConfig, theme, uiThemes, setU
     const reader = new FileReader();
     reader.onload = (ev) => {
         try {
-            const data = JSON.parse(ev.target?.result as string);
-            // Basic validation
-            if (!data['omni_conf_v1']) throw new Error("Invalid Backup");
+            const fileContent = JSON.parse(ev.target?.result as string);
             
-            Object.keys(data).forEach(k => {
-                if (k !== 'timestamp') localStorage.setItem(k, JSON.stringify(data[k]));
-            });
+            // Handle new standard .omni backup
+            if (fileContent.type === 'omni_backup_v1' && fileContent.payload) {
+                const data = fileContent.payload;
+                Object.keys(data).forEach(k => {
+                   localStorage.setItem(k, JSON.stringify(data[k]));
+                });
+            } 
+            // Handle legacy/raw format
+            else if (fileContent['omni_conf_v1']) {
+                 Object.keys(fileContent).forEach(k => {
+                    if (k !== 'timestamp' && k !== 'type') localStorage.setItem(k, JSON.stringify(fileContent[k]));
+                });
+            } else {
+                throw new Error("Invalid Format");
+            }
+            
             window.location.reload();
-        } catch (err) { alert('Backup Error'); }
+        } catch (err) { alert('Backup Error or Invalid .omni file'); }
     };
     reader.readAsText(file);
   };

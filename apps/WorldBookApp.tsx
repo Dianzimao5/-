@@ -86,6 +86,14 @@ const WorldBookApp: React.FC<Props> = ({ currentWorld, setCurrentWorld, savedWor
       }
   };
 
+  const handleExportWorld = () => {
+      const exportData = {
+          type: 'omni_world_v1',
+          ...currentWorld
+      };
+      downloadJson(exportData, `${currentWorld.metadata.name}_export.omni`);
+  };
+
   const handleImportWorld = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -93,10 +101,14 @@ const WorldBookApp: React.FC<Props> = ({ currentWorld, setCurrentWorld, savedWor
     reader.onload = (ev) => {
         try {
             const data = JSON.parse(ev.target?.result as string);
-            if (data.metadata && data.character && data.world) {
-                data.id = `world_import_${Date.now()}`;
-                setSavedWorlds(prev => [...prev, data]);
-                setCurrentWorld(data);
+            // Support both strict type check and legacy structure check
+            if ((data.type === 'omni_world_v1' || !data.type) && data.metadata && data.character && data.world) {
+                // Remove type field if present for internal storage
+                const { type, ...cleanWorld } = data;
+                cleanWorld.id = `world_import_${Date.now()}`;
+                
+                setSavedWorlds(prev => [...prev, cleanWorld]);
+                setCurrentWorld(cleanWorld);
                 alert(langText.import_success);
             } else { 
                 alert(langText.import_error); 
@@ -129,7 +141,7 @@ const WorldBookApp: React.FC<Props> = ({ currentWorld, setCurrentWorld, savedWor
                     <button onClick={() => fileInputRef.current?.click()} className={`flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full border ${theme.id==='night'?'border-cyan-600 text-cyan-400 hover:bg-cyan-900/50':'border-gray-300 text-gray-600 hover:bg-gray-100'}`}>
                         <Upload size={14}/> {langText.wb_import_world}
                     </button>
-                    <button onClick={() => downloadJson(currentWorld, `${currentWorld.metadata.name}_export.omni`)} className={`flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full border ${theme.id==='night'?'border-cyan-600 text-cyan-400 hover:bg-cyan-900/50':'border-gray-300 text-gray-600 hover:bg-gray-100'}`}>
+                    <button onClick={handleExportWorld} className={`flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full border ${theme.id==='night'?'border-cyan-600 text-cyan-400 hover:bg-cyan-900/50':'border-gray-300 text-gray-600 hover:bg-gray-100'}`}>
                         <Download size={14}/> {langText.wb_export_world}
                     </button>
                     <input type="file" ref={fileInputRef} onChange={handleImportWorld} accept=".omni" className="hidden" />
