@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Trash2, ArrowLeft, RefreshCw, List, ImageIcon, XCircle, Scroll } from 'lucide-react';
+import { Settings, Trash2, ArrowLeft, RefreshCw, Send, Bot, Zap, Book, MoreHorizontal } from 'lucide-react';
 import { Theme, AppConfig, AssistantConfig, World, Message } from '../types';
 import SimpleMarkdown from '../components/SimpleMarkdown';
 
@@ -7,44 +7,40 @@ interface Props {
   config: AppConfig;
   assistant: AssistantConfig;
   setAssistant: React.Dispatch<React.SetStateAction<AssistantConfig>>;
+  savedWorlds: World[];
   theme: Theme;
   currentWorld: World;
   langText: Record<string, string>;
 }
 
-const AssistantApp: React.FC<Props> = ({ config, assistant, setAssistant, theme, currentWorld, langText }) => {
+const AssistantApp: React.FC<Props> = ({ config, assistant, setAssistant, savedWorlds, theme, currentWorld, langText }) => {
   const [view, setView] = useState<'chat' | 'config'>('chat');
-  const [messages, setMessages] = useState<Message[]>([{ role: 'assistant', content: assistant.greeting, id: 1 }]);
-  const [historySummary, setHistorySummary] = useState(''); 
-  
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [streamingContent, setStreamingContent] = useState(''); 
   const [fullResponse, setFullResponse] = useState(''); 
-  const [imageAttachment, setImageAttachment] = useState<string | null>(null); 
-  const [showMenu, setShowMenu] = useState(false); 
-  
+  const [showCommands, setShowCommands] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const typingSpeed = 15; 
-
-  const inputClass = `w-full p-2 rounded border text-sm outline-none transition-all ${theme.id === 'night' ? 'bg-gray-900 border-cyan-800 text-cyan-50 placeholder-cyan-800 focus:border-cyan-500' : 'bg-transparent border-gray-300 focus:bg-white focus:border-indigo-400'}`;
-
-  // Load History
+  
+  // Load/Save System Messages
   useEffect(() => {
-    const saved = localStorage.getItem('omni_messages_v1');
-    const savedSum = localStorage.getItem('omni_summary_v1');
-    if (saved) setMessages(JSON.parse(saved));
-    if (savedSum) setHistorySummary(savedSum);
+    const saved = localStorage.getItem('omni_msgs_system');
+    if (saved) {
+        try { setMessages(JSON.parse(saved)); } catch(e) { setMessages([]); }
+    } else {
+        setMessages([{ role: 'assistant', content: assistant.greeting, id: 1 }]);
+    }
   }, []);
 
-  // Save History
   useEffect(() => {
-    localStorage.setItem('omni_messages_v1', JSON.stringify(messages));
-    localStorage.setItem('omni_summary_v1', historySummary);
+    if (messages.length > 0) localStorage.setItem('omni_msgs_system', JSON.stringify(messages));
+  }, [messages]);
+
+  useEffect(() => {
     if (view === 'chat' && !isTyping) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, view, isTyping, historySummary]);
+  }, [messages, view, isTyping]);
 
   // Typewriter Effect
   useEffect(() => {
@@ -52,7 +48,7 @@ const AssistantApp: React.FC<Props> = ({ config, assistant, setAssistant, theme,
       const timeout = setTimeout(() => {
         setStreamingContent(fullResponse.slice(0, streamingContent.length + 1));
         messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
-      }, typingSpeed);
+      }, 15);
       return () => clearTimeout(timeout);
     } else if (isTyping && streamingContent.length === fullResponse.length) {
       setIsTyping(false);
@@ -61,323 +57,197 @@ const AssistantApp: React.FC<Props> = ({ config, assistant, setAssistant, theme,
     }
   }, [isTyping, streamingContent, fullResponse]);
 
-  const summarizeHistory = async (msgsToSummarize: Message[]) => {
-    if (!config.apiKey) return;
-    try {
-        const prompt = "Please summarize the following conversation history into a concise paragraph to be used as context memory for future interactions. Keep important facts, names, and current status.";
-        const content = JSON.stringify(msgsToSummarize.map(m => `${m.role}: ${m.content}`));
-        
-        let summaryText = "";
-        
-        const body = config.provider === 'gemini' 
-            ? { contents: [{ parts: [{ text: prompt + "\n\n" + content }] }] }
-            : { model: config.model, messages: [{ role: "system", content: "You are a summarizer." }, { role: "user", content: prompt + "\n" + content }] };
-        
-        const url = config.provider === 'gemini' 
-            ? `${config.apiEndpoint}/${config.model}:generateContent?key=${config.apiKey}`
-            : `${config.apiEndpoint}/chat/completions`;
-
-        const res = await fetch(url, {
-             method: 'POST',
-             headers: config.provider === 'gemini' ? {'Content-Type': 'application/json'} : {'Content-Type': 'application/json', 'Authorization': `Bearer ${config.apiKey}`},
-             body: JSON.stringify(body)
-        });
-        const data = await res.json();
-        
-        if (config.provider === 'gemini') {
-            summaryText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        } else {
-            summaryText = data.choices?.[0]?.message?.content;
-        }
-
-        if (summaryText) {
-            setHistorySummary(prev => prev ? prev + "\n[Update]: " + summaryText : summaryText);
-        }
-    } catch (e) {
-        console.error("Summary failed", e);
-    }
-  };
-
-  const handleSendMessage = async (textOverride: string | null = null) => {
+  const handleSendMessage = async (textOverride?: string) => {
     const textToSend = textOverride || input;
-    if ((!textToSend.trim() && !imageAttachment) || isLoading || isTyping) return;
-
+    if (!textToSend.trim() || isLoading || isTyping) return;
     if (!config.apiKey) {
         setMessages(prev => [...prev, { role: 'assistant', content: langText.sys_tip_key, id: Date.now() }]);
         return;
     }
 
-    const userMsg: Message = { role: 'user', content: textToSend, image: imageAttachment, id: Date.now() };
-    const newHistory = [...messages, userMsg];
-    setMessages(newHistory);
+    const userMsg: Message = { role: 'user', content: textToSend, id: Date.now() };
+    setMessages(prev => [...prev, userMsg]);
     setInput('');
-    setImageAttachment(null);
-    setShowMenu(false);
+    setShowCommands(false);
     setIsLoading(true);
 
-    const MAX_CONTEXT_MSG = 15;
-    const TRIGGER_SUMMARY_COUNT = 25;
-    
-    let messagesToSend = [];
-    
-    let playerPrompt = config.useGlobalProfile 
-        ? `[User Profile]: Name:${config.userProfile.name}, Gender:${config.userProfile.gender}, Bio:${config.userProfile.likes}`
-        : `[User Profile]: Name:${currentWorld.player?.name || 'User'}, Bio:${currentWorld.player?.bio || 'Unknown'}`;
-
-    let coreSystem = `
-[AI Assistant Persona]:
-Name: ${assistant.name}
-Instructions: ${assistant.systemPrompt}
-
-[Current World Context]:
-World Name: ${currentWorld.metadata.name}
-Lore: ${currentWorld.world.lore}
-
-${playerPrompt}
-    `.trim();
-
-    if (historySummary) {
-        coreSystem += `\n\n[Previous Conversation Summary]:\n${historySummary}`;
-    }
-
-    if (newHistory.length > MAX_CONTEXT_MSG) {
-        messagesToSend = newHistory.slice(-MAX_CONTEXT_MSG);
-    } else {
-        messagesToSend = newHistory;
-    }
-
-    if (newHistory.length > TRIGGER_SUMMARY_COUNT && newHistory.length % 5 === 0) {
-        const msgsToArchive = newHistory.slice(0, newHistory.length - MAX_CONTEXT_MSG);
-        summarizeHistory(msgsToArchive.slice(-10)); 
-    }
-
     try {
-      let aiText = "";
-
-      if (config.provider === 'gemini') {
-        const geminiHistory = messagesToSend.map(m => {
-            const parts: any[] = [{ text: m.content || " " }];
-            if (m.image) {
-                const base64Data = m.image.split(',')[1];
-                const mimeType = m.image.split(';')[0].split(':')[1];
-                parts.push({ inlineData: { mimeType: mimeType, data: base64Data } });
-            }
-            return { role: m.role === 'user' ? 'user' : 'model', parts: parts };
-        });
-
-        const url = `${config.apiEndpoint}/${config.model}:generateContent?key=${config.apiKey}`;
-        const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                systemInstruction: { parts: [{ text: coreSystem }] },
-                contents: geminiHistory,
-                generationConfig: { temperature: 0.7, maxOutputTokens: 2000 }
-            })
-        });
-
-        if (!res.ok) throw new Error((await res.json()).error?.message || "Gemini Error");
-        const data = await res.json();
-        aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || langText.no_signal;
-
-      } else {
-        const apiMessages = [
-            { role: "system", content: coreSystem },
-            ...messagesToSend.map(m => ({ 
-                role: m.role, 
-                content: m.image ? `[Image Uploaded] ${m.content}` : m.content
-            }))
-        ];
-
-        const res = await fetch(`${config.apiEndpoint}/chat/completions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.apiKey}` },
-            body: JSON.stringify({ model: config.model, messages: apiMessages, temperature: 0.7 })
-        });
+        let systemPromptText = `[System Assistant]: ${assistant.name}\n${assistant.systemPrompt}`;
+        if (config.useGlobalProfile) {
+            systemPromptText += `\n[User]: ${config.userProfile.name} (UID: ${config.userProfile.uid || 'Unknown'}) (${config.userProfile.likes})`;
+        }
         
-        if (!res.ok) throw new Error("API Error");
-        const data = await res.json();
-        aiText = data.choices?.[0]?.message?.content || langText.no_signal;
-      }
+        const msgsToSend = [...messages, userMsg].slice(-10); // Context window
 
-      setFullResponse(aiText);
-      setIsLoading(false);
-      setIsTyping(true);
-      setStreamingContent(aiText.charAt(0));
+        let aiText = "";
+        if (config.provider === 'gemini') {
+             const contents = msgsToSend.map(m => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.content }] }));
+             const url = `${config.apiEndpoint}/${config.model}:generateContent?key=${config.apiKey}`;
+             const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    systemInstruction: { parts: [{ text: systemPromptText }] },
+                    contents: contents
+                })
+             });
+             const data = await res.json();
+             aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || langText.no_signal;
+        } else {
+            const apiMessages = [{ role: "system", content: systemPromptText }, ...msgsToSend.map(m => ({ role: m.role, content: m.content }))];
+            const res = await fetch(`${config.apiEndpoint}/chat/completions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.apiKey}` },
+                body: JSON.stringify({ model: config.model, messages: apiMessages })
+            });
+            const data = await res.json();
+            aiText = data.choices?.[0]?.message?.content || langText.no_signal;
+        }
 
-    } catch (error: any) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${error.message}`, id: Date.now() + 1 }]);
-      setIsLoading(false);
+        setFullResponse(aiText);
+        setIsLoading(false);
+        setIsTyping(true);
+        setStreamingContent(aiText.charAt(0));
+    } catch (err: any) {
+        setIsLoading(false);
+        setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}`, id: Date.now() }]);
     }
   };
 
-  const bubbleUser = theme.id === 'simple' 
-    ? 'bg-gradient-to-br from-indigo-600 to-blue-600 text-white shadow-md' 
-    : theme.id === 'dao' 
-        ? 'bg-[#2e7d32] text-[#f1f8e9] border border-[#a5d6a7] shadow-sm' 
-        : 'bg-cyan-900/80 text-cyan-100 border border-cyan-500/50 shadow-[0_0_10px_rgba(0,188,212,0.2)]';
-  
-  const bubbleAi = theme.id === 'simple' 
-    ? 'bg-white/90 backdrop-blur-sm text-slate-800 border border-white/50 shadow-sm' 
-    : theme.id === 'dao' 
-        ? 'bg-[#f1f8e9] text-[#1b5e20] border border-[#c8e6c9] shadow-sm' 
-        : 'bg-black/60 backdrop-blur-md text-cyan-100 border border-cyan-800/50';
+  const handleSwitchAssistant = (world: World | null) => {
+      if (!world) {
+          // Reset to default
+          setAssistant({
+              name: 'Omni',
+              avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Omni',
+              greeting: 'OmniTerminal initiated.',
+              systemPrompt: 'Your name is Omni, a helpful AI assistant.'
+          });
+      } else {
+          setAssistant({
+              name: world.character.name,
+              avatar: world.character.avatar,
+              greeting: world.character.greeting || `Hello, I am ${world.character.name}.`,
+              systemPrompt: world.character.personality
+          });
+      }
+      setMessages([]);
+      alert(langText.ast_save_tip);
+  };
 
-  if (view === 'config') return (
-    <div className="h-full flex flex-col animate-in slide-in-from-right">
-        <div className={`p-4 border-b flex items-center justify-between ${theme.id === 'night' ? 'border-cyan-800' : 'border-gray-200/50'}`}>
-            <div className="flex items-center gap-2">
-                <button onClick={() => setView('chat')} className={`p-2 rounded-full hover:bg-black/5`}><ArrowLeft size={20} className={theme.statusBarText}/></button>
-                <span className={`font-bold ${theme.statusBarText}`}>{langText.ast_config_title}</span>
-            </div>
+  const renderConfig = () => (
+     <div className="h-full flex flex-col animate-in slide-in-from-right">
+        <div className={`p-4 border-b flex items-center gap-2 ${theme.id === 'night' ? 'border-cyan-800' : 'border-gray-200'}`}>
+            <button onClick={() => setView('chat')} className={`p-2 rounded-full hover:bg-black/5`}><ArrowLeft size={20} className={theme.statusBarText}/></button>
+            <span className={`font-bold ${theme.statusBarText}`}>{langText.ast_config_title}</span>
         </div>
-        <div className="p-6 overflow-y-auto space-y-4">
-             <div className="flex gap-4 items-start">
+        <div className="p-6 overflow-y-auto space-y-6">
+            {/* Assistant Switcher */}
+            <div>
+                <h3 className={`text-xs font-bold opacity-60 mb-2 uppercase ${theme.statusBarText}`}>{langText.ast_switch_title}</h3>
+                <div className="flex gap-2 overflow-x-auto pb-2">
+                    <button onClick={() => handleSwitchAssistant(null)} className={`flex-shrink-0 w-24 p-2 rounded-xl border flex flex-col items-center gap-2 ${theme.id==='night'?'border-cyan-800 bg-cyan-900/20':'border-gray-200 bg-gray-50'}`}>
+                        <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white"><Bot size={20}/></div>
+                        <span className="text-[10px] truncate w-full text-center font-bold">{langText.ast_lib_default}</span>
+                    </button>
+                    {savedWorlds.map(w => (
+                        <button key={w.id} onClick={() => handleSwitchAssistant(w)} className={`flex-shrink-0 w-24 p-2 rounded-xl border flex flex-col items-center gap-2 ${theme.id==='night'?'border-cyan-800 hover:bg-cyan-900/20':'border-gray-200 hover:bg-gray-50'}`}>
+                            <img src={w.character.avatar} className="w-10 h-10 rounded-full object-cover"/>
+                            <span className="text-[10px] truncate w-full text-center font-bold">{w.character.name}</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Editable Fields */}
+            <div className="flex gap-4 items-start">
                 <div className="flex-1 space-y-4">
-                    <div><label className={`text-xs font-bold opacity-60 mb-1 block ${theme.statusBarText}`}>{langText.ast_name}</label><input value={assistant.name} onChange={e=>setAssistant(p=>({...p,name:e.target.value}))} className={inputClass}/></div>
-                    <div><label className={`text-xs font-bold opacity-60 mb-1 block ${theme.statusBarText}`}>{langText.ast_avatar}</label><input value={assistant.avatar} onChange={e=>setAssistant(p=>({...p,avatar:e.target.value}))} className={inputClass}/></div>
+                    <div><label className={`text-xs font-bold opacity-60 mb-1 block ${theme.statusBarText}`}>{langText.ast_name}</label><input value={assistant.name} onChange={e=>setAssistant(p=>({...p,name:e.target.value}))} className={`w-full p-2 rounded border text-sm outline-none ${theme.inputBg}`}/></div>
+                    <div><label className={`text-xs font-bold opacity-60 mb-1 block ${theme.statusBarText}`}>{langText.ast_avatar}</label><input value={assistant.avatar} onChange={e=>setAssistant(p=>({...p,avatar:e.target.value}))} className={`w-full p-2 rounded border text-sm outline-none ${theme.inputBg}`}/></div>
                 </div>
                 <img src={assistant.avatar} className="w-24 h-24 rounded-xl object-cover bg-gray-300 shadow-md" alt="Avatar"/>
             </div>
-            <div><label className={`text-xs font-bold opacity-60 mb-1 block ${theme.statusBarText}`}>{langText.ast_prompt}</label><textarea value={assistant.systemPrompt} onChange={e=>setAssistant(p=>({...p,systemPrompt:e.target.value}))} rows={6} className={`resize-none ${inputClass}`}/></div>
-            <div><label className={`text-xs font-bold opacity-60 mb-1 block ${theme.statusBarText}`}>{langText.ast_greeting}</label><textarea value={assistant.greeting} onChange={e=>setAssistant(p=>({...p,greeting:e.target.value}))} rows={2} className={`resize-none ${inputClass}`}/></div>
+            <div><label className={`text-xs font-bold opacity-60 mb-1 block ${theme.statusBarText}`}>{langText.ast_prompt}</label><textarea value={assistant.systemPrompt} onChange={e=>setAssistant(p=>({...p,systemPrompt:e.target.value}))} rows={6} className={`w-full p-2 rounded border text-sm outline-none resize-none ${theme.inputBg}`}/></div>
+            <div><label className={`text-xs font-bold opacity-60 mb-1 block ${theme.statusBarText}`}>{langText.ast_greeting}</label><textarea value={assistant.greeting} onChange={e=>setAssistant(p=>({...p,greeting:e.target.value}))} rows={2} className={`w-full p-2 rounded border text-sm outline-none resize-none ${theme.inputBg}`}/></div>
         </div>
-    </div>
+     </div>
   );
 
+  if (view === 'config') return renderConfig();
+
   return (
-    <div className="flex flex-col h-full relative">
-      <div className={`p-4 border-b flex justify-between items-center ${theme.id === 'night' ? 'border-cyan-800' : 'border-gray-200/50'}`}>
-        <div className="flex items-center gap-3">
-          <div className="relative">
-             <img src={assistant.avatar} className="w-10 h-10 rounded-full object-cover border border-white/20 shadow-sm" alt="Bot" />
-             <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white"></div>
-          </div>
-          <div>
-            <div className={`font-bold ${theme.statusBarText}`}>{assistant.name}</div>
-            <div className="text-[10px] opacity-60 flex items-center gap-1">
-                {isLoading ? langText.typing : isTyping ? 'Typing...' : langText.online}
+    <div className="h-full flex flex-col relative animate-in fade-in">
+        {/* Header */}
+        <div className={`p-3 px-4 border-b flex items-center justify-between z-10 ${theme.id==='night'?'bg-gray-900/80 border-cyan-900':'bg-white/80 border-gray-100'} backdrop-blur-md`}>
+            <div className="flex items-center gap-2">
+                <Bot size={20} className={theme.statusBarText} />
+                <span className={`font-bold text-sm ${theme.statusBarText}`}>{assistant.name}</span>
             </div>
-          </div>
-        </div>
-        <div className="flex gap-2">
-            <button onClick={() => {setMessages([]); setHistorySummary('');}} className="opacity-50 hover:opacity-100 hover:text-red-500 transition-colors"><Trash2 size={18} className={theme.statusBarText}/></button>
-            <button onClick={() => setView('config')} className="opacity-50 hover:opacity-100 transition-colors"><Settings size={18} className={theme.statusBarText}/></button>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4 space-y-5 scroll-smooth">
-        {historySummary && (
-            <div className={`text-[10px] p-3 rounded-lg mx-auto max-w-[90%] text-center border-dashed border ${theme.id==='night'?'border-cyan-900 text-cyan-600':'border-gray-300 text-gray-400'}`}>
-                <div className="font-bold mb-1 opacity-70 flex items-center justify-center gap-1"><Scroll size={12}/> {langText.summary_label}</div>
-                <div className="line-clamp-2 opacity-60 italic">{historySummary}</div>
+            <div className="flex gap-2">
+                <button onClick={() => setMessages([])} className="opacity-50 hover:opacity-100 hover:text-red-500 p-1"><Trash2 size={18}/></button>
+                <button onClick={() => setView('config')} className="opacity-50 hover:opacity-100 p-1"><Settings size={18} className={theme.statusBarText}/></button>
             </div>
-        )}
+        </div>
 
-        {messages.map((msg) => (
-          <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} animate-in fade-in slide-in-from-bottom-2`}>
-            {msg.role === 'assistant' && (
-                <img src={assistant.avatar} className="w-8 h-8 rounded-full object-cover mt-1 self-start shadow-sm border border-white/10" alt="Bot" />
-            )}
-            <div className={`max-w-[85%] flex flex-col gap-1 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                {msg.image && <img src={msg.image} className="max-w-full h-32 rounded-lg border border-white/20 mb-1 object-cover shadow-md" alt="Attachment" />}
-                <div className={`px-4 py-3 rounded-2xl text-sm ${msg.role === 'user' ? bubbleUser + ' rounded-tr-sm' : bubbleAi + ' rounded-tl-sm'}`}>
-                   <SimpleMarkdown text={msg.content} theme={theme} />
+        {/* Chat Area */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {messages.map((msg) => (
+                <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                    {msg.role === 'assistant' && <img src={assistant.avatar} className="w-8 h-8 rounded-full border border-black/5" alt="Bot"/>}
+                    <div className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm ${msg.role === 'user' ? (theme.id==='night'?'bg-cyan-700 text-white':'bg-blue-600 text-white') : (theme.id==='night'?'bg-gray-800 text-cyan-50':'bg-white border text-gray-800 shadow-sm')}`}>
+                        <SimpleMarkdown text={msg.content} theme={theme} />
+                    </div>
                 </div>
-            </div>
-          </div>
-        ))}
-        
-        {isTyping && (
-           <div className="flex gap-3 animate-in fade-in">
-              <img src={assistant.avatar} className="w-8 h-8 rounded-full object-cover mt-1 self-start shadow-sm border border-white/10" alt="Bot" />
-              <div className={`max-w-[85%] px-4 py-3 rounded-2xl rounded-tl-sm text-sm ${bubbleAi}`}>
-                  <SimpleMarkdown text={streamingContent + ' ▍'} theme={theme} />
-              </div>
-           </div>
-        )}
+            ))}
+            {isTyping && (
+                <div className="flex gap-3">
+                    <img src={assistant.avatar} className="w-8 h-8 rounded-full border border-black/5" alt="Bot"/>
+                    <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm ${theme.id==='night'?'bg-gray-800 text-cyan-50':'bg-white border text-gray-800 shadow-sm'}`}>
+                         {streamingContent ? <SimpleMarkdown text={streamingContent} theme={theme} /> : <span className="animate-pulse">...</span>}
+                    </div>
+                </div>
+            )}
+            <div ref={messagesEndRef} />
+        </div>
 
-        <div ref={messagesEndRef} />
-      </div>
-
-      <div className="p-3 relative z-10">
-        {showMenu && (
-            <div className={`absolute bottom-16 left-3 w-56 rounded-xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-2 border ${theme.id==='night'?'bg-gray-900/95 border-cyan-700 backdrop-blur-xl':'bg-white/95 border-white/50 backdrop-blur-xl'}`}>
-                <div className={`px-4 py-2 text-[10px] font-bold uppercase opacity-50 ${theme.statusBarText}`}>{langText.cmd_menu_title}</div>
+        {/* Command Menu */}
+        {showCommands && (
+            <div className={`absolute bottom-16 left-4 right-4 rounded-xl shadow-xl z-20 p-2 grid grid-cols-2 gap-2 animate-in slide-in-from-bottom-2 ${theme.windowBg} border ${theme.id==='night'?'border-cyan-800':'border-gray-200'}`}>
                 {[
-                    { l: langText.cmd_analyze, cmd: '请分析当前世界书的世界观设定，并给出简要报告。' },
-                    { l: langText.cmd_status, cmd: '请检查终端系统状态，并确认当前连接的模型。' },
-                    { l: langText.cmd_help, cmd: '请告诉我如何使用万象终端。' },
-                    { l: langText.cmd_story, cmd: '请回顾一下我们之前的经历。' },
-                ].map((item, i) => (
-                    <button 
-                        key={i} 
-                        onClick={() => handleSendMessage(item.cmd)}
-                        className={`w-full text-left px-4 py-3 text-xs border-b border-black/5 last:border-0 hover:bg-black/5 transition-colors ${theme.statusBarText}`}
-                    >
-                        {item.l}
+                    { label: langText.cmd_analyze, cmd: "Analyze the current world setting and logic based on my WorldBook." },
+                    { label: langText.cmd_status, cmd: "Perform a system check and report status." },
+                    { label: langText.cmd_help, cmd: "How do I use this terminal?" },
+                    { label: langText.cmd_story, cmd: "Summarize the recent story events." }
+                ].map((c, i) => (
+                    <button key={i} onClick={() => handleSendMessage(c.cmd)} className={`p-3 text-left text-xs font-bold rounded-lg hover:bg-black/5 flex items-center gap-2 border ${theme.id==='night'?'border-cyan-900/50':'border-gray-100'}`}>
+                        <Zap size={14} className="opacity-50"/> {c.label}
                     </button>
                 ))}
             </div>
         )}
 
-        {imageAttachment && (
-            <div className={`mx-2 mb-2 p-2 rounded-lg flex items-center justify-between border ${theme.id === 'night' ? 'bg-cyan-900/30 border-cyan-800' : 'bg-blue-50 border-blue-100'}`}>
-                <div className="flex items-center gap-2">
-                    <img src={imageAttachment} className="w-8 h-8 rounded object-cover border border-white/20" alt="Preview" />
-                    <span className={`text-xs ${theme.statusBarText} opacity-70`}>{langText.img_attached}</span>
-                </div>
-                <button onClick={() => setImageAttachment(null)} className="opacity-50 hover:opacity-100"><XCircle size={16} className={theme.statusBarText} /></button>
+        {/* Input */}
+        <div className={`p-3 border-t ${theme.id==='night'?'bg-gray-900 border-cyan-900':'bg-white border-gray-100'}`}>
+            <div className="flex gap-2">
+                <button onClick={() => setShowCommands(!showCommands)} className={`p-2 rounded-full ${showCommands ? (theme.id==='night'?'bg-cyan-600 text-white':'bg-gray-200 text-black') : 'opacity-50 hover:bg-black/5'}`}>
+                    <Zap size={20}/>
+                </button>
+                <input 
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
+                    placeholder={langText.msg_placeholder}
+                    className={`flex-1 px-4 py-2 rounded-full outline-none text-sm ${theme.inputBg}`}
+                />
+                <button 
+                    onClick={() => handleSendMessage()} 
+                    disabled={!input.trim() || isLoading}
+                    className={`p-2 rounded-full ${!input.trim() ? 'opacity-50' : ''} ${theme.id==='night'?'bg-cyan-600 text-white':'bg-blue-600 text-white'}`}
+                >
+                    {isLoading ? <RefreshCw className="animate-spin" size={20}/> : <Send size={20}/>}
+                </button>
             </div>
-        )}
-
-        <div className={`flex items-end gap-2 p-1.5 rounded-[24px] border shadow-sm transition-all ${theme.inputBg}`}>
-            <button 
-                onClick={() => setShowMenu(!showMenu)} 
-                className={`p-2.5 rounded-full transition-colors ${theme.id === 'night' ? 'hover:bg-cyan-900/50 text-cyan-400' : 'hover:bg-gray-100 text-gray-500'}`}
-            >
-                <List size={20}/>
-            </button>
-            
-            <button 
-                onClick={() => fileInputRef.current?.click()} 
-                className={`p-2.5 rounded-full transition-colors ${theme.id === 'night' ? 'hover:bg-cyan-900/50 text-cyan-400' : 'hover:bg-gray-100 text-gray-500'}`}
-                title={langText.img_upload_title}
-            >
-                <ImageIcon size={20}/>
-            </button>
-            <input type="file" ref={fileInputRef} onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = (ev) => setImageAttachment(ev.target?.result as string);
-                    reader.readAsDataURL(file);
-                }
-            }} accept="image/*" className="hidden" />
-
-            <textarea 
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={e => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage();
-                    }
-                }}
-                placeholder={langText.msg_placeholder}
-                rows={1}
-                className={`flex-1 bg-transparent px-2 py-2.5 outline-none text-sm placeholder-current opacity-80 resize-none max-h-24`}
-                style={{minHeight: '44px'}}
-            />
-            <button 
-                onClick={() => handleSendMessage()} 
-                disabled={isLoading || isTyping}
-                className={`p-2.5 rounded-full text-white transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:scale-100 ${theme.accentColor}`}
-            >
-                {isLoading ? <RefreshCw className="animate-spin" size={20} /> : <ArrowLeft className="rotate-180" size={20} />}
-            </button>
         </div>
-      </div>
     </div>
   );
 };

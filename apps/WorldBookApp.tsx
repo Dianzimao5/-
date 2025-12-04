@@ -12,12 +12,43 @@ interface Props {
   config: AppConfig;
 }
 
+// Extracted Input component to avoid remounting issues
+const WorldInput = ({ label, val, k, section, isArea, theme, onChange }: { 
+    label: string, 
+    val: any, 
+    k: string, 
+    section: keyof World, 
+    isArea?: boolean, 
+    theme: Theme,
+    onChange: (section: keyof World, k: string, val: string) => void
+}) => {
+    const inputClass = `w-full p-3 rounded-lg text-sm outline-none border ${theme.id === 'night' ? 'bg-gray-900 border-cyan-800 text-cyan-50 focus:border-cyan-500' : 'bg-transparent border-gray-300 focus:border-blue-500'}`;
+    
+    return (
+        <div className="mb-4">
+            <label className={`block text-xs font-bold mb-1 opacity-60 ${theme.statusBarText}`}>{label}</label>
+            {isArea ? (
+                <textarea 
+                    value={val || ''} 
+                    onChange={e => onChange(section, k, e.target.value)} 
+                    rows={6} 
+                    className={`resize-none ${inputClass}`} 
+                />
+            ) : (
+                <input 
+                    value={val || ''} 
+                    onChange={e => onChange(section, k, e.target.value)} 
+                    className={inputClass} 
+                />
+            )}
+        </div>
+    );
+};
+
 const WorldBookApp: React.FC<Props> = ({ currentWorld, setCurrentWorld, savedWorlds, setSavedWorlds, theme, langText, config }) => {
   const [view, setView] = useState('home'); 
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const inputClass = `w-full p-3 rounded-lg text-sm outline-none border ${theme.id === 'night' ? 'bg-gray-900 border-cyan-800 text-cyan-50 focus:border-cyan-500' : 'bg-transparent border-gray-300 focus:border-blue-500'}`;
-
   const downloadJson = (data: any, filename: string) => {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -25,22 +56,9 @@ const WorldBookApp: React.FC<Props> = ({ currentWorld, setCurrentWorld, savedWor
     URL.revokeObjectURL(url);
   };
 
-  const Input = ({ label, val, k, section, isArea }: { label: string, val: any, k: string, section: keyof World, isArea?: boolean }) => (
-    <div className="mb-4">
-        <label className={`block text-xs font-bold mb-1 opacity-60 ${theme.statusBarText}`}>{label}</label>
-        {isArea ? (
-            <textarea value={val || ''} onChange={e => {
-                    const newVal = e.target.value;
-                    setCurrentWorld((prev: any) => ({ ...prev, [section]: { ...prev[section], [k]: newVal } }));
-                }} rows={6} className={`resize-none ${inputClass}`} />
-        ) : (
-            <input value={val || ''} onChange={e => {
-                    const newVal = e.target.value;
-                    setCurrentWorld((prev: any) => ({ ...prev, [section]: { ...prev[section], [k]: newVal } }));
-                }} className={inputClass} />
-        )}
-    </div>
-  );
+  const handleInputChange = (section: keyof World, k: string, val: string) => {
+    setCurrentWorld((prev: any) => ({ ...prev, [section]: { ...prev[section], [k]: val } }));
+  };
 
   const handleCreate = () => {
       const newWorld: World = {
@@ -160,6 +178,8 @@ const WorldBookApp: React.FC<Props> = ({ currentWorld, setCurrentWorld, savedWor
     </div>
   );
 
+  const inputClass = `w-full p-3 rounded-lg text-sm outline-none border ${theme.id === 'night' ? 'bg-gray-900 border-cyan-800 text-cyan-50 focus:border-cyan-500' : 'bg-transparent border-gray-300 focus:border-blue-500'}`;
+
   if (view !== 'home') return (
     <div className="h-full flex flex-col">
         <div className="p-4 border-b flex items-center gap-2 border-current/10">
@@ -169,8 +189,8 @@ const WorldBookApp: React.FC<Props> = ({ currentWorld, setCurrentWorld, savedWor
         <div className="flex-1 overflow-y-auto p-6 animate-in slide-in-from-right-4">
             {view === 'meta' && (
                 <>
-                    <Input section="metadata" k="name" val={currentWorld.metadata.name} label={langText.wb_meta_name} />
-                    <Input section="metadata" k="description" val={currentWorld.metadata.description} label={langText.wb_meta_desc} isArea />
+                    <WorldInput theme={theme} onChange={handleInputChange} section="metadata" k="name" val={currentWorld.metadata.name} label={langText.wb_meta_name} />
+                    <WorldInput theme={theme} onChange={handleInputChange} section="metadata" k="description" val={currentWorld.metadata.description} label={langText.wb_meta_desc} isArea />
                     <div className="mb-4">
                          <label className={`block text-xs font-bold mb-1 opacity-60 ${theme.statusBarText}`}>{langText.wb_meta_tags}</label>
                          <input value={currentWorld.metadata.tags.join(', ')} onChange={e => {
@@ -187,10 +207,10 @@ const WorldBookApp: React.FC<Props> = ({ currentWorld, setCurrentWorld, savedWor
                     </div>
                     <h3 className={`text-xs font-bold uppercase tracking-wider mb-3 opacity-50 ${theme.statusBarText}`}>{langText.wb_char_ai_title}</h3>
                     <div className="flex gap-4">
-                        <div className="flex-1"><Input section="character" k="name" val={currentWorld.character.name} label={langText.ph_name} /></div>
-                        <div className="w-1/3"><Input section="character" k="avatar" val={currentWorld.character.avatar} label="URL" /></div>
+                        <div className="flex-1"><WorldInput theme={theme} onChange={handleInputChange} section="character" k="name" val={currentWorld.character.name} label={langText.ph_name} /></div>
+                        <div className="w-1/3"><WorldInput theme={theme} onChange={handleInputChange} section="character" k="avatar" val={currentWorld.character.avatar} label="URL" /></div>
                     </div>
-                    <Input section="character" k="personality" val={currentWorld.character.personality} label="System Prompt (Ref)" isArea />
+                    <WorldInput theme={theme} onChange={handleInputChange} section="character" k="personality" val={currentWorld.character.personality} label="System Prompt (Ref)" isArea />
 
                     <div className={`mt-8 pt-4 border-t ${theme.id==='night'?'border-cyan-900':'border-gray-200'}`}>
                         <div className="flex justify-between items-center mb-4">
@@ -206,10 +226,10 @@ const WorldBookApp: React.FC<Props> = ({ currentWorld, setCurrentWorld, savedWor
                         ) : (
                             <div className="space-y-4">
                                 <div className="flex gap-4">
-                                    <div className="flex-1"><Input section="player" k="name" val={currentWorld.player?.name} label={langText.ph_name} /></div>
-                                    <div className="w-1/3"><Input section="player" k="avatar" val={currentWorld.player?.avatar} label="URL" /></div>
+                                    <div className="flex-1"><WorldInput theme={theme} onChange={handleInputChange} section="player" k="name" val={currentWorld.player?.name} label={langText.ph_name} /></div>
+                                    <div className="w-1/3"><WorldInput theme={theme} onChange={handleInputChange} section="player" k="avatar" val={currentWorld.player?.avatar} label="URL" /></div>
                                 </div>
-                                <Input section="player" k="bio" val={currentWorld.player?.bio} label={langText.ph_bio} isArea />
+                                <WorldInput theme={theme} onChange={handleInputChange} section="player" k="bio" val={currentWorld.player?.bio} label={langText.ph_bio} isArea />
                             </div>
                         )}
                     </div>
@@ -217,7 +237,7 @@ const WorldBookApp: React.FC<Props> = ({ currentWorld, setCurrentWorld, savedWor
             )}
             {view === 'world' && (
                 <>
-                   <Input section="world" k="lore" val={currentWorld.world.lore} label="World Lore / Global Context" isArea />
+                   <WorldInput theme={theme} onChange={handleInputChange} section="world" k="lore" val={currentWorld.world.lore} label="World Lore / Global Context" isArea />
                 </>
             )}
         </div>

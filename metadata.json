@@ -1,5 +1,5 @@
 {
-  "name": "OmniTerminal",
-  "description": "A high-freedom, customizable AI terminal simulator. Features a multi-theme OS interface, WorldBook for lore management, and support for custom API connections (Gemini/OpenAI).",
+  "name": "OmniTerminal v0.5.0",
+  "description": "A high-freedom, customizable AI terminal simulator. Features a multi-theme OS interface, WorldBook for lore management, standalone Wanxiang Assistant, and the OmniChat Social Platform.",
   "requestFramePermissions": []
 }

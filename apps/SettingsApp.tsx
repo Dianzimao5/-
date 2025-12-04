@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Settings, ArrowLeft, Link, Palette, User, Info, Globe, Upload, Download, ToggleLeft, ToggleRight, Zap } from 'lucide-react';
+import { Settings, ArrowLeft, Link, Palette, User, Info, Globe, Upload, Download, ToggleLeft, ToggleRight, Zap, Database, Trash2 } from 'lucide-react';
 import { Theme, AppConfig, AssistantConfig } from '../types';
 import { PRESET_THEMES } from '../constants';
 
@@ -17,6 +17,7 @@ interface Props {
 const SettingsApp: React.FC<Props> = ({ config, setConfig, theme, uiThemes, setUiThemes, langText }) => {
   const [subView, setSubView] = useState('main'); 
   const themeInputRef = useRef<HTMLInputElement>(null);
+  const backupInputRef = useRef<HTMLInputElement>(null);
 
   const cardClass = `p-4 rounded-xl border ${theme.id === 'night' ? 'border-cyan-900 bg-cyan-950/30 text-cyan-50' : 'border-gray-200 bg-white/60 text-gray-700'} h-full overflow-y-auto`;
   const inputClass = `w-full p-2 rounded border text-sm outline-none ${theme.id === 'night' ? 'bg-gray-900 border-cyan-800 text-cyan-50 placeholder-cyan-800' : 'bg-transparent border-gray-300'}`;
@@ -60,6 +61,50 @@ const SettingsApp: React.FC<Props> = ({ config, setConfig, theme, uiThemes, setU
     reader.readAsText(file);
   };
 
+  // --- System Management ---
+
+  const handleExportAll = () => {
+    const keys = ['omni_conf_v1', 'omni_themes_v1', 'omni_worlds_v1', 'omni_assist_v1', 'omni_contacts', 'omni_groups', 'omni_chats', 'omni_msgs_system'];
+    const backup: Record<string, any> = {};
+    keys.forEach(k => {
+        const v = localStorage.getItem(k);
+        if (v) backup[k] = JSON.parse(v);
+    });
+    // Include current state just in case
+    backup['timestamp'] = new Date().toISOString();
+    downloadJson(backup, `OmniTerminal_Backup_${new Date().toISOString().slice(0,10)}.json`);
+  };
+
+  const handleImportAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!confirm(langText.sys_import_confirm)) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        try {
+            const data = JSON.parse(ev.target?.result as string);
+            // Basic validation
+            if (!data['omni_conf_v1']) throw new Error("Invalid Backup");
+            
+            Object.keys(data).forEach(k => {
+                if (k !== 'timestamp') localStorage.setItem(k, JSON.stringify(data[k]));
+            });
+            window.location.reload();
+        } catch (err) { alert('Backup Error'); }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleResetAll = () => {
+      if (confirm(langText.sys_reset_confirm)) {
+        localStorage.clear();
+        window.location.reload();
+      }
+  };
+
+  // --- Render Sections ---
+
   const renderConn = () => (
     <div className={cardClass}>
         <h3 className="font-bold mb-4 opacity-70 flex items-center gap-2"><Link size={18}/> {langText.conn_title}</h3>
@@ -85,9 +130,15 @@ const SettingsApp: React.FC<Props> = ({ config, setConfig, theme, uiThemes, setU
         <h3 className="font-bold mb-4 opacity-70 flex items-center gap-2"><Palette size={18}/> {langText.set_theme}</h3>
         <div className="mb-6 p-3 rounded-lg border bg-black/5 border-transparent flex items-center justify-between">
             <span className="text-xs font-bold opacity-70">{langText.theme_lang_switch}</span>
-            <button onClick={() => handleConfig('language', config.language === 'zh' ? 'en' : 'zh')} className={`px-3 py-1 rounded text-xs font-bold bg-white text-black shadow-sm`}>
-                {config.language === 'zh' ? '中文' : 'English'}
-            </button>
+            <select 
+                value={config.language} 
+                onChange={(e) => handleConfig('language', e.target.value)}
+                className={`p-1 rounded text-xs font-bold border outline-none ${theme.id==='night'?'bg-gray-800 border-cyan-800 text-cyan-100':'bg-white border-gray-300 text-black'}`}
+            >
+                <option value="zh">中文 (简体)</option>
+                <option value="en">English</option>
+                <option value="ja">日本語</option>
+            </select>
         </div>
         <label className="text-xs font-bold opacity-50 block mb-2">{langText.theme_installed}</label>
         <div className="grid grid-cols-3 gap-2 mb-6">
@@ -119,7 +170,10 @@ const SettingsApp: React.FC<Props> = ({ config, setConfig, theme, uiThemes, setU
         </div>
         <div className={`space-y-3 transition-opacity ${config.useGlobalProfile ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
             <input value={config.userProfile.name} onChange={e=>handleProfile('name',e.target.value)} placeholder={langText.ph_name} className={inputClass}/>
-            <input value={config.userProfile.avatar} onChange={e=>handleProfile('avatar',e.target.value)} placeholder={langText.ph_avatar} className={inputClass}/>
+            <div className="flex gap-2">
+                 <input value={config.userProfile.uid || ''} onChange={e=>handleProfile('uid',e.target.value)} placeholder={langText.ph_uid} className={inputClass}/>
+                 <input value={config.userProfile.avatar} onChange={e=>handleProfile('avatar',e.target.value)} placeholder={langText.ph_avatar} className={inputClass}/>
+            </div>
             <div className="flex gap-2">
                 <input value={config.userProfile.gender} onChange={e=>handleProfile('gender',e.target.value)} placeholder={langText.ph_gender} className={inputClass}/>
                 <input value={config.userProfile.age} onChange={e=>handleProfile('age',e.target.value)} placeholder={langText.ph_age} className={inputClass}/>
@@ -127,6 +181,31 @@ const SettingsApp: React.FC<Props> = ({ config, setConfig, theme, uiThemes, setU
             <textarea value={config.userProfile.likes} onChange={e=>handleProfile('likes',e.target.value)} placeholder={langText.ph_bio} rows={3} className={`resize-none ${inputClass}`}/>
         </div>
     </div>
+  );
+
+  const renderSystem = () => (
+      <div className={cardClass}>
+           <h3 className="font-bold mb-4 opacity-70 flex items-center gap-2"><Database size={18}/> {langText.sys_manage}</h3>
+           
+           <div className="space-y-4">
+                <div className={`p-4 rounded-xl border flex flex-col gap-2 ${theme.id==='night'?'border-cyan-800 bg-cyan-900/10':'border-gray-200 bg-white'}`}>
+                    <h4 className="font-bold text-sm">{langText.sys_export_all}</h4>
+                    <button onClick={handleExportAll} className={actionBtnClass}><Download size={14}/> {langText.export}</button>
+                </div>
+
+                <div className={`p-4 rounded-xl border flex flex-col gap-2 ${theme.id==='night'?'border-cyan-800 bg-cyan-900/10':'border-gray-200 bg-white'}`}>
+                    <h4 className="font-bold text-sm">{langText.sys_import_all}</h4>
+                    <button onClick={() => backupInputRef.current?.click()} className={actionBtnClass}><Upload size={14}/> {langText.import}</button>
+                    <input type="file" ref={backupInputRef} onChange={handleImportAll} accept=".json" className="hidden" />
+                </div>
+
+                <div className="pt-8 border-t border-red-500/20">
+                     <button onClick={handleResetAll} className={`w-full p-3 rounded-lg border text-red-500 hover:bg-red-500/10 border-red-500/50 flex items-center justify-center gap-2 font-bold text-xs`}>
+                        <Trash2 size={16}/> {langText.sys_reset}
+                     </button>
+                </div>
+           </div>
+      </div>
   );
 
   if (subView === 'main') {
@@ -139,6 +218,7 @@ const SettingsApp: React.FC<Props> = ({ config, setConfig, theme, uiThemes, setU
                 <button onClick={() => setSubView('conn')} className={btnClass}><Globe size={20} className="opacity-70"/><span className="text-[10px] font-bold">{langText.set_conn}</span></button>
                 <button onClick={() => setSubView('theme')} className={btnClass}><Palette size={20} className="opacity-70"/><span className="text-[10px] font-bold">{langText.set_theme}</span></button>
                 <button onClick={() => setSubView('profile')} className={btnClass}><User size={20} className="opacity-70"/><span className="text-[10px] font-bold">{langText.set_profile}</span></button>
+                <button onClick={() => setSubView('system')} className={btnClass}><Database size={20} className="opacity-70"/><span className="text-[10px] font-bold">{langText.set_system}</span></button>
                 <button onClick={() => setSubView('about')} className={btnClass}><Info size={20} className="opacity-70"/><span className="text-[10px] font-bold">{langText.set_about}</span></button>
             </div>
         </div>
@@ -157,6 +237,7 @@ const SettingsApp: React.FC<Props> = ({ config, setConfig, theme, uiThemes, setU
             {subView === 'conn' && renderConn()}
             {subView === 'theme' && renderTheme()}
             {subView === 'profile' && renderProfile()}
+            {subView === 'system' && renderSystem()}
             {subView === 'about' && (
                 <div className={`p-8 text-center flex flex-col items-center justify-center h-full opacity-60 ${theme.statusBarText}`}>
                     <Zap size={48} className="mb-4"/>

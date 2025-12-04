@@ -22,14 +22,18 @@ export interface Theme {
 
 export interface UserProfile {
   name: string;
+  uid?: string; // Added UID
   avatar: string;
   gender: string;
   age: string;
-  likes: string;
+  likes: string; // Bio/Signature
+  level?: number;
+  signature?: string;
+  bgImage?: string;
 }
 
 export interface AppConfig {
-  language: 'zh' | 'en';
+  language: 'zh' | 'en' | 'ja'; // Added ja
   theme: string;
   provider: 'openai' | 'gemini';
   apiKey: string;
@@ -44,6 +48,30 @@ export interface Message {
   content: string;
   id: number;
   image?: string | null;
+  senderId?: string; // For group chats
+  senderName?: string;
+}
+
+export interface Contact {
+  id: string;
+  uid?: string; // Added Display UID
+  name: string;
+  avatar: string;
+  bio: string;
+  personality: string;
+  level: number;
+  isPlayer?: boolean;
+  bgImage?: string;
+  tags?: string[];
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  avatar: string;
+  notice: string;
+  ownerId: string;
+  members: string[]; // List of Contact IDs
 }
 
 export interface AssistantConfig {
