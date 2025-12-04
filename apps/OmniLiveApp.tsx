@@ -288,7 +288,12 @@ export default function OmniLiveApp({ config, setConfig, theme, currentWorld, la
           if (!character) return;
 
           const recentContext = comments.slice(-3).map(c => `${c.user}: ${c.text}`).join('\n');
-          const langInstruction = `Output Language: ${config.language === 'zh' ? 'Chinese' : config.language === 'ja' ? 'Japanese' : 'English'}`;
+          
+          let targetLang = config.language;
+          if (character.language && character.language !== 'auto') {
+              targetLang = character.language;
+          }
+          const langInstruction = `Output Language: ${targetLang === 'zh' ? 'Chinese' : targetLang === 'ja' ? 'Japanese' : 'English'}`;
           
           const systemPrompt = `You are playing the role of a live streamer.
           Character: ${character.name}.
@@ -306,9 +311,10 @@ export default function OmniLiveApp({ config, setConfig, theme, currentWorld, la
           ${recentContext || '(No comments yet)'}`;
 
           let responseText = "";
-          
+          const cleanEndpoint = config.apiEndpoint.replace(/\/$/, '');
+
           if (config.provider === 'gemini') {
-             const url = `${config.apiEndpoint}/${config.model}:generateContent?key=${config.apiKey}`;
+             const url = `${cleanEndpoint}/${config.model}:generateContent?key=${config.apiKey}`;
              const res = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -319,7 +325,7 @@ export default function OmniLiveApp({ config, setConfig, theme, currentWorld, la
              const data = await res.json();
              responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
           } else {
-             const res = await fetch(`${config.apiEndpoint}/chat/completions`, {
+             const res = await fetch(`${cleanEndpoint}/chat/completions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.apiKey}` },
                 body: JSON.stringify({

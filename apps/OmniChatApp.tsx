@@ -109,7 +109,7 @@ const EditContact = ({ theme, langText, popRoute, params, contacts, setContacts,
                 </div>
                 {!isMe && (
                     <div className="space-y-1">
-                        <label className="text-xs opacity-50 font-bold flex items-center gap-1"><Languages size={12}/> AI Output Language</label>
+                        <label className="text-xs opacity-50 font-bold flex items-center gap-1"><Languages size={12}/> AI Output Language (Override)</label>
                         <select 
                             value={form.language || 'auto'} 
                             onChange={e=>setForm({...form, language:e.target.value})} 
@@ -144,176 +144,9 @@ const EditContact = ({ theme, langText, popRoute, params, contacts, setContacts,
     );
 };
 
-const CreateGroup = ({ theme, langText, popRoute, contacts, handleCreateGroup }: any) => {
-    // ... same as before ...
-    const [name, setName] = useState('');
-    const [selected, setSelected] = useState<string[]>([]);
-    return (
-        <div className="h-full flex flex-col">
-            <div className="p-4 border-b flex items-center gap-3">
-                <button onClick={popRoute}><ArrowLeft size={20}/></button>
-                <span className="font-bold flex-1">{langText.oc_create_group}</span>
-                <button onClick={() => name && selected.length>0 && handleCreateGroup(name, selected)} disabled={!name || selected.length===0} className="text-xs font-bold bg-blue-600 text-white px-3 py-1 rounded disabled:opacity-50">Done</button>
-            </div>
-            <div className="p-4 border-b">
-                <input placeholder={langText.oc_group_name} value={name} onChange={e=>setName(e.target.value)} className={`w-full p-3 rounded-lg bg-transparent border ${theme.id==='night'?'border-cyan-900':'border-gray-300'}`}/>
-            </div>
-            <div className="flex-1 overflow-y-auto p-2">
-                {contacts.map((c: Contact) => (
-                    <div key={c.id} onClick={() => setSelected(prev => prev.includes(c.id) ? prev.filter(i=>i!==c.id) : [...prev, c.id])} className={`flex items-center gap-3 p-3 mb-1 rounded-xl cursor-pointer ${selected.includes(c.id) ? (theme.id==='night'?'bg-cyan-900/40 border border-cyan-500':'bg-blue-50 border border-blue-200') : 'opacity-70'}`}>
-                            <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${selected.includes(c.id) ? 'bg-green-500 border-green-500' : 'border-gray-400'}`}>
-                            {selected.includes(c.id) && <div className="w-2 h-2 bg-white rounded-full"/>}
-                            </div>
-                            <img src={c.avatar} className="w-10 h-10 rounded-full object-cover shrink-0" />
-                            <div className="font-bold text-sm">{c.name}</div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-const GroupInvite = ({ theme, langText, popRoute, params, groups, setGroups, contacts }: any) => {
-    // ... same as before ...
-    const [selected, setSelected] = useState<string[]>([]);
-    const g = groups.find((gr: Group) => gr.id === params.id);
-    if (!g) return null;
-    const candidates = contacts.filter((c: Contact) => !g.members.includes(c.id));
-    const handleInvite = () => {
-        setGroups((prev: Group[]) => prev.map(gr => gr.id === g.id ? {...gr, members: [...gr.members, ...selected]} : gr));
-        popRoute();
-    };
-    return (
-        <div className="h-full flex flex-col">
-            <div className="p-4 border-b flex items-center gap-3">
-                <button onClick={popRoute}><ArrowLeft size={20}/></button>
-                <span className="font-bold flex-1">{langText.oc_invite_member}</span>
-                <button onClick={handleInvite} disabled={selected.length===0} className="text-xs font-bold bg-blue-600 text-white px-3 py-1 rounded disabled:opacity-50">Done</button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-2">
-                {candidates.length === 0 && <div className="text-center opacity-50 p-4">No contacts to invite.</div>}
-                {candidates.map((c: Contact) => (
-                    <div key={c.id} onClick={() => setSelected(prev => prev.includes(c.id) ? prev.filter(i=>i!==c.id) : [...prev, c.id])} className={`flex items-center gap-3 p-3 mb-1 rounded-xl cursor-pointer ${selected.includes(c.id) ? (theme.id==='night'?'bg-cyan-900/40 border border-cyan-500':'bg-blue-50 border border-blue-200') : 'opacity-70'}`}>
-                            <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${selected.includes(c.id) ? 'bg-green-500 border-green-500' : 'border-gray-400'}`}>
-                            {selected.includes(c.id) && <div className="w-2 h-2 bg-white rounded-full"/>}
-                            </div>
-                            <img src={c.avatar} className="w-10 h-10 rounded-full object-cover shrink-0" />
-                            <div className="font-bold text-sm">{c.name}</div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-const GroupInfo = ({ theme, langText, popRoute, params, groups, setGroups, getContact, pushRoute }: any) => {
-    // ... same as before ...
-    const g = groups.find((gr: Group) => gr.id === params.id);
-    const [isTransferring, setIsTransferring] = useState(false);
-    if (!g) return null;
-    const updateGroup = (k: string, v: any) => setGroups((prev: Group[]) => prev.map(gr => gr.id === g.id ? {...gr, [k]: v} : gr));
-    const leaveGroup = () => {
-        setGroups((prev: Group[]) => prev.filter(gr => gr.id !== g.id));
-        popRoute(); 
-    };
-    const removeMember = (mid: string) => {
-        if(confirm(`Remove member?`)) {
-             setGroups((prev: Group[]) => prev.map(gr => gr.id === g.id ? {...gr, members: gr.members.filter(m => m !== mid)} : gr));
-        }
-    };
-    return (
-        <div className="h-full flex flex-col bg-neutral-50/5">
-            <div className="p-4 border-b flex items-center gap-3">
-                <button onClick={popRoute}><ArrowLeft size={20}/></button>
-                <span className="font-bold flex-1">{langText.oc_group_setting}</span>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-6">
-                <div className="text-center">
-                    <img src={g.avatar} className="w-20 h-20 rounded-full mx-auto mb-2 bg-gray-200 object-cover shrink-0" />
-                    <h2 className="text-xl font-bold">{g.name}</h2>
-                    <p className="text-xs opacity-50">ID: {g.id}</p>
-                </div>
-                <div className={`p-4 rounded-xl border ${theme.id==='night'?'bg-cyan-900/10 border-cyan-800':'bg-white border-gray-200'}`}>
-                    <h3 className="text-xs font-bold opacity-50 uppercase mb-2">{langText.oc_group_notice}</h3>
-                    <textarea value={g.notice} onChange={e=>updateGroup('notice', e.target.value)} className="w-full bg-transparent resize-none text-sm outline-none"/>
-                </div>
-                <div>
-                    <h3 className="text-xs font-bold opacity-50 uppercase mb-2 flex justify-between items-center">
-                        <span>{langText.oc_group_members} ({g.members.length})</span>
-                        <button onClick={() => pushRoute('group_invite', { id: g.id })} className="text-blue-500 flex items-center gap-1 text-[10px] bg-blue-500/10 px-2 py-1 rounded hover:bg-blue-500/20"><UserPlus size={12}/> {langText.oc_invite_member}</button>
-                    </h3>
-                    <div className="grid grid-cols-5 gap-2">
-                        {g.members.map((mid: string) => {
-                            const m = getContact(mid);
-                            if (!m) return null;
-                            return (
-                                <div key={mid} className="relative group">
-                                    <div onClick={() => isTransferring && updateGroup('ownerId', mid)} className="flex flex-col items-center gap-1 cursor-pointer">
-                                        <img src={m.avatar} className={`w-10 h-10 rounded-full object-cover shrink-0 ${g.ownerId === mid ? 'border-2 border-yellow-500' : ''}`} />
-                                        <span className="text-[9px] truncate w-full text-center">{m.name}</span>
-                                    </div>
-                                    {g.ownerId === 'player' && mid !== 'player' && !isTransferring && (
-                                        <button onClick={() => removeMember(mid)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <XCircle size={12}/>
-                                        </button>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-                <div className="space-y-2">
-                    {g.ownerId === 'player' && (
-                        <button onClick={() => setIsTransferring(!isTransferring)} className={`w-full py-3 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold ${isTransferring ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500' : 'opacity-60 border-current'}`}>
-                            <Shield size={14}/> {isTransferring ? 'Select New Owner above' : langText.oc_group_transfer}
-                        </button>
-                    )}
-                    <button onClick={leaveGroup} className="w-full py-3 rounded-xl border border-red-500 text-red-500 bg-red-500/10 flex items-center justify-center gap-2 text-xs font-bold">
-                        <LogOut size={14}/> {g.ownerId === 'player' ? langText.oc_disband_group : langText.oc_leave_group}
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const ProfileView = ({ theme, langText, popRoute, params, getContact, pushRoute }: any) => {
-    // ... same as before ...
-    const c = getContact(params.id);
-    if (!c) return <div onClick={popRoute}>Error</div>;
-    return (
-        <div className="h-full flex flex-col bg-neutral-900/5">
-            <div className="h-48 w-full bg-cover bg-center relative" style={{ backgroundImage: `url(${c.bgImage})` }}>
-                    <button onClick={popRoute} className="absolute top-4 left-4 p-2 rounded-full bg-black/30 text-white hover:bg-black/50"><ArrowLeft size={20}/></button>
-            </div>
-            <div className={`flex-1 -mt-6 rounded-t-3xl relative px-6 pt-16 overflow-y-auto ${theme.windowBg}`}>
-                <img src={c.avatar} className={`absolute -top-12 left-6 w-24 h-24 rounded-full border-4 object-cover shrink-0 ${theme.id==='night'?'border-gray-900':'border-white'}`} alt="Av"/>
-                <div className="flex justify-between items-start mb-4">
-                    <div>
-                        <h1 className="text-2xl font-bold flex items-center gap-2">
-                            {c.name} 
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${theme.id==='night'?'bg-yellow-900 text-yellow-500 border-yellow-700':'bg-yellow-100 text-yellow-700 border-yellow-200'}`}>Lv.{c.level}</span>
-                        </h1>
-                        <p className="text-xs opacity-50">UID: {c.uid || c.id.split('_')[1]}</p>
-                    </div>
-                    <div className="flex gap-2">
-                        <button onClick={() => { popRoute(); pushRoute('chat_room', { id: c.id, isGroup: false })}} className={`p-3 rounded-full ${theme.id==='night'?'bg-cyan-600 text-white':'bg-blue-600 text-white'} shadow-lg active:scale-95`}><MessageCircle size={20}/></button>
-                        <button onClick={() => pushRoute('edit_contact', { id: c.id })} className={`p-3 rounded-full border ${theme.id==='night'?'border-cyan-700 text-cyan-400':'border-gray-300 text-gray-600'} hover:bg-black/5`}><Edit3 size={20}/></button>
-                    </div>
-                </div>
-                <div className="space-y-6">
-                    <div>
-                        <h3 className="text-xs font-bold opacity-50 uppercase mb-2">{langText.oc_label_bio}</h3>
-                        <div className={`p-4 rounded-xl text-sm leading-relaxed ${theme.id==='night'?'bg-black/20':'bg-gray-50'}`}>{c.bio || 'No signature.'}</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
+// ... other components (CreateGroup, GroupInvite, GroupInfo, ProfileView) remain same ...
 
 // --- Extracted ChatRoom Component ---
-// This ensures state resets when mounting/unmounting
 const ChatRoom = ({ theme, langText, popRoute, params, groups, contacts, chats, setChats, pushRoute, config, getContact, getGroup, getTargetAvatar }: any) => {
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -338,7 +171,6 @@ const ChatRoom = ({ theme, langText, popRoute, params, groups, contacts, chats, 
         const textToSend = input;
         
         if (!config.apiKey) {
-             // Mock response if no key
              const userMsg: Message = { role: 'user', content: textToSend, image: imageAttachment, id: Date.now(), senderId: 'player' };
              setChats((prev: any) => ({...prev, [targetId]: [...(prev[targetId]||[]), userMsg]}));
              setInput('');
@@ -356,33 +188,40 @@ const ChatRoom = ({ theme, langText, popRoute, params, groups, contacts, chats, 
         setIsLoading(true);
     
         try {
+            // --- Prompt & Language Logic ---
             let systemPrompt = "";
             let contextMsgs = (chats[targetId] || []).slice(-10);
             
-            let targetLang = config.language; 
+            // Determine Target Language
+            let targetLangCode = config.language;
             if (!isGroup) {
                  const c = getContact(targetId);
                  if (c && c.language && c.language !== 'auto') {
-                     targetLang = c.language;
+                     targetLangCode = c.language;
                  }
             }
-            const langInstruction = `\nIMPORTANT: You MUST reply in ${targetLang === 'zh' ? 'Simplified Chinese (简体中文)' : targetLang === 'ja' ? 'Japanese (日本語)' : 'English'}.`;
+            const langName = targetLangCode === 'zh' ? 'Simplified Chinese (简体中文)' : targetLangCode === 'ja' ? 'Japanese (日本語)' : 'English';
+            const langInstruction = `\n[PROTOCOL] Output Language: ${langName}. You MUST reply in ${langName}.`;
     
             if (isGroup) {
                 const group = getGroup(targetId);
                 const memberNames = group?.members.map((mid: string) => getContact(mid)?.name).join(', ');
-                systemPrompt = `You are roleplaying as members of a group chat named "${group?.name}". 
-                Members: ${memberNames}. 
-                Notice: ${group?.notice}.
-                When the user speaks, ONE relevant member should reply. 
-                Format: Just the message content. Assume you are that character.
+                systemPrompt = `You are playing roles of group members in "${group?.name}". 
+                Members: ${memberNames}. Notice: ${group?.notice}.
+                Rule: When user speaks, ONE appropriate member replies.
+                Style: Casual group chat. Short messages.
                 ${langInstruction}`;
             } else {
                 const contact = getContact(targetId);
                 systemPrompt = `Roleplay as ${contact?.name}. 
-                Personality: ${contact?.personality}. 
-                Bio: ${contact?.bio}.
-                User Level: ${contact?.level}.
+                Description: ${contact?.bio}.
+                Personality: ${contact?.personality}.
+                Level: ${contact?.level}.
+                
+                Instructions:
+                1. Stay in character at all times.
+                2. Keep responses concise and engaging.
+                3. Do not output internal monologue unless asked.
                 ${langInstruction}`;
             }
     
@@ -421,9 +260,7 @@ const ChatRoom = ({ theme, langText, popRoute, params, groups, contacts, chats, 
                  });
                  
                  const text = await res.text();
-                 if (text.trim().startsWith('<')) {
-                     throw new Error("Endpoint returned HTML instead of JSON. Please check your API Endpoint URL (did you forget '/v1'?).");
-                 }
+                 if (text.trim().startsWith('<')) throw new Error("Endpoint returned HTML. Check URL.");
                  
                  let data;
                  try { data = JSON.parse(text); } catch(e) { throw new Error(`Invalid Response: ${text.substring(0,50)}`); }
@@ -450,6 +287,8 @@ const ChatRoom = ({ theme, langText, popRoute, params, groups, contacts, chats, 
         }
     };
 
+    // ... useEffects and Render ...
+    
     useEffect(() => {
         if (isTyping && streamingContent.length < fullResponse.length) {
           const timeout = setTimeout(() => {
@@ -528,23 +367,181 @@ const ChatRoom = ({ theme, langText, popRoute, params, groups, contacts, chats, 
     );
 };
 
-// Main App
-
-type Route = { name: string, params?: any };
+// ... Rest of OmniChatApp ... (Main App, etc. - no changes needed there, just providing structure to close file)
+const CreateGroup = ({ theme, langText, popRoute, contacts, handleCreateGroup }: any) => {
+    // ... code from previous ...
+    const [name, setName] = useState('');
+    const [selected, setSelected] = useState<string[]>([]);
+    return (
+        <div className="h-full flex flex-col">
+            <div className="p-4 border-b flex items-center gap-3">
+                <button onClick={popRoute}><ArrowLeft size={20}/></button>
+                <span className="font-bold flex-1">{langText.oc_create_group}</span>
+                <button onClick={() => name && selected.length>0 && handleCreateGroup(name, selected)} disabled={!name || selected.length===0} className="text-xs font-bold bg-blue-600 text-white px-3 py-1 rounded disabled:opacity-50">Done</button>
+            </div>
+            <div className="p-4 border-b">
+                <input placeholder={langText.oc_group_name} value={name} onChange={e=>setName(e.target.value)} className={`w-full p-3 rounded-lg bg-transparent border ${theme.id==='night'?'border-cyan-900':'border-gray-300'}`}/>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2">
+                {contacts.map((c: Contact) => (
+                    <div key={c.id} onClick={() => setSelected(prev => prev.includes(c.id) ? prev.filter(i=>i!==c.id) : [...prev, c.id])} className={`flex items-center gap-3 p-3 mb-1 rounded-xl cursor-pointer ${selected.includes(c.id) ? (theme.id==='night'?'bg-cyan-900/40 border border-cyan-500':'bg-blue-50 border border-blue-200') : 'opacity-70'}`}>
+                            <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${selected.includes(c.id) ? 'bg-green-500 border-green-500' : 'border-gray-400'}`}>
+                            {selected.includes(c.id) && <div className="w-2 h-2 bg-white rounded-full"/>}
+                            </div>
+                            <img src={c.avatar} className="w-10 h-10 rounded-full object-cover shrink-0" />
+                            <div className="font-bold text-sm">{c.name}</div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+const GroupInvite = ({ theme, langText, popRoute, params, groups, setGroups, contacts }: any) => {
+    const [selected, setSelected] = useState<string[]>([]);
+    const g = groups.find((gr: Group) => gr.id === params.id);
+    if (!g) return null;
+    const candidates = contacts.filter((c: Contact) => !g.members.includes(c.id));
+    const handleInvite = () => {
+        setGroups((prev: Group[]) => prev.map(gr => gr.id === g.id ? {...gr, members: [...gr.members, ...selected]} : gr));
+        popRoute();
+    };
+    return (
+        <div className="h-full flex flex-col">
+            <div className="p-4 border-b flex items-center gap-3">
+                <button onClick={popRoute}><ArrowLeft size={20}/></button>
+                <span className="font-bold flex-1">{langText.oc_invite_member}</span>
+                <button onClick={handleInvite} disabled={selected.length===0} className="text-xs font-bold bg-blue-600 text-white px-3 py-1 rounded disabled:opacity-50">Done</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2">
+                {candidates.length === 0 && <div className="text-center opacity-50 p-4">No contacts to invite.</div>}
+                {candidates.map((c: Contact) => (
+                    <div key={c.id} onClick={() => setSelected(prev => prev.includes(c.id) ? prev.filter(i=>i!==c.id) : [...prev, c.id])} className={`flex items-center gap-3 p-3 mb-1 rounded-xl cursor-pointer ${selected.includes(c.id) ? (theme.id==='night'?'bg-cyan-900/40 border border-cyan-500':'bg-blue-50 border border-blue-200') : 'opacity-70'}`}>
+                            <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${selected.includes(c.id) ? 'bg-green-500 border-green-500' : 'border-gray-400'}`}>
+                            {selected.includes(c.id) && <div className="w-2 h-2 bg-white rounded-full"/>}
+                            </div>
+                            <img src={c.avatar} className="w-10 h-10 rounded-full object-cover shrink-0" />
+                            <div className="font-bold text-sm">{c.name}</div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+const GroupInfo = ({ theme, langText, popRoute, params, groups, setGroups, getContact, pushRoute }: any) => {
+    const g = groups.find((gr: Group) => gr.id === params.id);
+    const [isTransferring, setIsTransferring] = useState(false);
+    if (!g) return null;
+    const updateGroup = (k: string, v: any) => setGroups((prev: Group[]) => prev.map(gr => gr.id === g.id ? {...gr, [k]: v} : gr));
+    const leaveGroup = () => {
+        setGroups((prev: Group[]) => prev.filter(gr => gr.id !== g.id));
+        popRoute(); 
+    };
+    const removeMember = (mid: string) => {
+        if(confirm(`Remove member?`)) {
+             setGroups((prev: Group[]) => prev.map(gr => gr.id === g.id ? {...gr, members: gr.members.filter(m => m !== mid)} : gr));
+        }
+    };
+    return (
+        <div className="h-full flex flex-col bg-neutral-50/5">
+            <div className="p-4 border-b flex items-center gap-3">
+                <button onClick={popRoute}><ArrowLeft size={20}/></button>
+                <span className="font-bold flex-1">{langText.oc_group_setting}</span>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                <div className="text-center">
+                    <img src={g.avatar} className="w-20 h-20 rounded-full mx-auto mb-2 bg-gray-200 object-cover shrink-0" />
+                    <h2 className="text-xl font-bold">{g.name}</h2>
+                    <p className="text-xs opacity-50">ID: {g.id}</p>
+                </div>
+                <div className={`p-4 rounded-xl border ${theme.id==='night'?'bg-cyan-900/10 border-cyan-800':'bg-white border-gray-200'}`}>
+                    <h3 className="text-xs font-bold opacity-50 uppercase mb-2">{langText.oc_group_notice}</h3>
+                    <textarea value={g.notice} onChange={e=>updateGroup('notice', e.target.value)} className="w-full bg-transparent resize-none text-sm outline-none"/>
+                </div>
+                <div>
+                    <h3 className="text-xs font-bold opacity-50 uppercase mb-2 flex justify-between items-center">
+                        <span>{langText.oc_group_members} ({g.members.length})</span>
+                        <button onClick={() => pushRoute('group_invite', { id: g.id })} className="text-blue-500 flex items-center gap-1 text-[10px] bg-blue-500/10 px-2 py-1 rounded hover:bg-blue-500/20"><UserPlus size={12}/> {langText.oc_invite_member}</button>
+                    </h3>
+                    <div className="grid grid-cols-5 gap-2">
+                        {g.members.map((mid: string) => {
+                            const m = getContact(mid);
+                            if (!m) return null;
+                            return (
+                                <div key={mid} className="relative group">
+                                    <div onClick={() => isTransferring && updateGroup('ownerId', mid)} className="flex flex-col items-center gap-1 cursor-pointer">
+                                        <img src={m.avatar} className={`w-10 h-10 rounded-full object-cover shrink-0 ${g.ownerId === mid ? 'border-2 border-yellow-500' : ''}`} />
+                                        <span className="text-[9px] truncate w-full text-center">{m.name}</span>
+                                    </div>
+                                    {g.ownerId === 'player' && mid !== 'player' && !isTransferring && (
+                                        <button onClick={() => removeMember(mid)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <XCircle size={12}/>
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+                <div className="space-y-2">
+                    {g.ownerId === 'player' && (
+                        <button onClick={() => setIsTransferring(!isTransferring)} className={`w-full py-3 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold ${isTransferring ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500' : 'opacity-60 border-current'}`}>
+                            <Shield size={14}/> {isTransferring ? 'Select New Owner above' : langText.oc_group_transfer}
+                        </button>
+                    )}
+                    <button onClick={leaveGroup} className="w-full py-3 rounded-xl border border-red-500 text-red-500 bg-red-500/10 flex items-center justify-center gap-2 text-xs font-bold">
+                        <LogOut size={14}/> {g.ownerId === 'player' ? langText.oc_disband_group : langText.oc_leave_group}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+const ProfileView = ({ theme, langText, popRoute, params, getContact, pushRoute }: any) => {
+    const c = getContact(params.id);
+    if (!c) return <div onClick={popRoute}>Error</div>;
+    return (
+        <div className="h-full flex flex-col bg-neutral-900/5">
+            <div className="h-48 w-full bg-cover bg-center relative" style={{ backgroundImage: `url(${c.bgImage})` }}>
+                    <button onClick={popRoute} className="absolute top-4 left-4 p-2 rounded-full bg-black/30 text-white hover:bg-black/50"><ArrowLeft size={20}/></button>
+            </div>
+            <div className={`flex-1 -mt-6 rounded-t-3xl relative px-6 pt-16 overflow-y-auto ${theme.windowBg}`}>
+                <img src={c.avatar} className={`absolute -top-12 left-6 w-24 h-24 rounded-full border-4 object-cover shrink-0 ${theme.id==='night'?'border-gray-900':'border-white'}`} alt="Av"/>
+                <div className="flex justify-between items-start mb-4">
+                    <div>
+                        <h1 className="text-2xl font-bold flex items-center gap-2">
+                            {c.name} 
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${theme.id==='night'?'bg-yellow-900 text-yellow-500 border-yellow-700':'bg-yellow-100 text-yellow-700 border-yellow-200'}`}>Lv.{c.level}</span>
+                        </h1>
+                        <p className="text-xs opacity-50">UID: {c.uid || c.id.split('_')[1]}</p>
+                    </div>
+                    <div className="flex gap-2">
+                        <button onClick={() => { popRoute(); pushRoute('chat_room', { id: c.id, isGroup: false })}} className={`p-3 rounded-full ${theme.id==='night'?'bg-cyan-600 text-white':'bg-blue-600 text-white'} shadow-lg active:scale-95`}><MessageCircle size={20}/></button>
+                        <button onClick={() => pushRoute('edit_contact', { id: c.id })} className={`p-3 rounded-full border ${theme.id==='night'?'border-cyan-700 text-cyan-400':'border-gray-300 text-gray-600'} hover:bg-black/5`}><Edit3 size={20}/></button>
+                    </div>
+                </div>
+                <div className="space-y-6">
+                    <div>
+                        <h3 className="text-xs font-bold opacity-50 uppercase mb-2">{langText.oc_label_bio}</h3>
+                        <div className={`p-4 rounded-xl text-sm leading-relaxed ${theme.id==='night'?'bg-black/20':'bg-gray-50'}`}>{c.bio || 'No signature.'}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const OmniChatApp: React.FC<Props> = ({ config, setConfig, assistant, theme, currentWorld, langText, onNavigate, launchParams }) => {
-  const [routeStack, setRouteStack] = useState<Route[]>([{ name: 'tab_main' }]);
+  const [routeStack, setRouteStack] = useState<any>([{ name: 'tab_main' }]);
   const [activeTab, setActiveTab] = useState<'msg' | 'contact' | 'me'>('msg');
   
-  // Data State
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [chats, setChats] = useState<Record<string, Message[]>>({}); 
   const [showMenu, setShowMenu] = useState(false);
 
   const currentRoute = routeStack[routeStack.length - 1];
-  const pushRoute = (name: string, params?: any) => setRouteStack(prev => [...prev, { name, params }]);
-  const popRoute = () => setRouteStack(prev => prev.length > 1 ? prev.slice(0, -1) : prev);
+  const pushRoute = (name: string, params?: any) => setRouteStack((prev: any) => [...prev, { name, params }]);
+  const popRoute = () => setRouteStack((prev: any) => prev.length > 1 ? prev.slice(0, -1) : prev);
 
   useEffect(() => {
     const savedContacts = localStorage.getItem('omni_contacts');
@@ -575,7 +572,6 @@ const OmniChatApp: React.FC<Props> = ({ config, setConfig, assistant, theme, cur
   useEffect(() => { localStorage.setItem('omni_groups', JSON.stringify(groups)); }, [groups]);
   useEffect(() => { localStorage.setItem('omni_chats', JSON.stringify(chats)); }, [chats]);
 
-  // Handle Share Launch
   useEffect(() => {
       if (launchParams && launchParams.shareText) {
           pushRoute('share_target', { shareText: launchParams.shareText });

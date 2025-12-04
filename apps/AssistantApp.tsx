@@ -74,7 +74,7 @@ const AssistantApp: React.FC<Props> = ({ config, assistant, setAssistant, savedW
     try {
         // Enforce Language
         const langName = config.language === 'zh' ? 'Simplified Chinese (简体中文)' : config.language === 'ja' ? 'Japanese (日本語)' : 'English';
-        const langInstruction = `\n[System]: You MUST reply in ${langName} regardless of user input language, unless explicitly asked to translate.`;
+        const langInstruction = `\n[PROTOCOL] Output Language: ${langName}. You MUST reply in ${langName} regardless of user input language, unless explicitly asked to translate.`;
 
         let systemPromptText = `[System Assistant]: ${assistant.name}\n${assistant.systemPrompt}${langInstruction}`;
         if (config.useGlobalProfile) {
