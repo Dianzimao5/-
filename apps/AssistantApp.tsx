@@ -84,9 +84,11 @@ const AssistantApp: React.FC<Props> = ({ config, assistant, setAssistant, savedW
         const msgsToSend = [...messages, userMsg].slice(-10); // Context window
 
         let aiText = "";
+        const cleanEndpoint = config.apiEndpoint.replace(/\/$/, '');
+
         if (config.provider === 'gemini') {
              const contents = msgsToSend.map(m => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.content }] }));
-             const url = `${config.apiEndpoint}/${config.model}:generateContent?key=${config.apiKey}`;
+             const url = `${cleanEndpoint}/${config.model}:generateContent?key=${config.apiKey}`;
              const res = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -95,16 +97,42 @@ const AssistantApp: React.FC<Props> = ({ config, assistant, setAssistant, savedW
                     contents: contents
                 })
              });
-             const data = await res.json();
+             
+             const text = await res.text();
+             if (text.startsWith('<')) throw new Error("Endpoint returned HTML. Check URL.");
+             
+             let data;
+             try { data = JSON.parse(text); } catch(e) { throw new Error(`Invalid JSON: ${text.substring(0,50)}`); }
+
+             if (!res.ok) throw new Error(data.error?.message || `Gemini Error ${res.status}`);
+             
              aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || langText.no_signal;
         } else {
             const apiMessages = [{ role: "system", content: systemPromptText }, ...msgsToSend.map(m => ({ role: m.role, content: m.content }))];
-            const res = await fetch(`${config.apiEndpoint}/chat/completions`, {
+            const res = await fetch(`${cleanEndpoint}/chat/completions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.apiKey}` },
                 body: JSON.stringify({ model: config.model, messages: apiMessages })
             });
-            const data = await res.json();
+            
+            const text = await res.text();
+            
+            // Check for HTML response (common with wrong endpoints)
+            if (text.trim().startsWith('<')) {
+                throw new Error("Endpoint returned HTML instead of JSON. Please check your API Endpoint URL (did you forget '/v1'?).");
+            }
+            
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                throw new Error(`Invalid Response: ${text.substring(0, 50)}...`);
+            }
+
+            if (!res.ok) {
+                throw new Error(data.error?.message || `API Error ${res.status}`);
+            }
+
             aiText = data.choices?.[0]?.message?.content || langText.no_signal;
         }
 

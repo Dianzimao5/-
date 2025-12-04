@@ -59,16 +59,6 @@ const I18N_COMMENTS: any = {
   }
 };
 
-const NPC_ACTIONS_POOL = [
-    "checks the holographic display.",
-    "adjusts the camera angle.",
-    "smiles at the audience.",
-    "shows a mysterious item.",
-    "looks around nervously.",
-    "thanks the new subscriber.",
-    "starts a new topic."
-];
-
 // --- Sub Components ---
 
 const EditProfileModal = ({ config, setConfig, theme, onClose, langText }: any) => {
@@ -247,6 +237,7 @@ export default function OmniLiveApp({ config, setConfig, theme, currentWorld, la
   const streamTimer = useRef<any>(null);
   const commentTimer = useRef<any>(null);
   const npcActionTimer = useRef<any>(null);
+  const isGeneratingRef = useRef(false);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
 
@@ -263,7 +254,7 @@ export default function OmniLiveApp({ config, setConfig, theme, currentWorld, la
     if (!topic) return;
     const streamerName = streamerMode === 'me' ? config.userProfile.name : contacts.find(c => c.id === npcId)?.name || 'NPC';
     const streamerAvatar = streamerMode === 'me' ? config.userProfile.avatar : contacts.find(c => c.id === npcId)?.avatar;
-    setActiveStream({ topic, streamer: streamerName, avatar: streamerAvatar, isMe: streamerMode === 'me' });
+    setActiveStream({ topic, streamer: streamerName, avatar: streamerAvatar, isMe: streamerMode === 'me', npcId: streamerMode === 'npc' ? npcId : null });
     setComments([]); setStreamContentLog([]); setStats({ viewers: 100, likes: 0, coins: 0, duration: 0 }); setView('room');
   };
 
@@ -288,6 +279,70 @@ export default function OmniLiveApp({ config, setConfig, theme, currentWorld, la
       setTimeout(() => setFloatingHearts(prev => prev.filter(h => h.id !== id)), 2500);
   };
 
+  const callAiHost = async () => {
+      if (isGeneratingRef.current || !config.apiKey || !activeStream || !activeStream.npcId) return;
+      isGeneratingRef.current = true;
+
+      try {
+          const character = contacts.find(c => c.id === activeStream.npcId);
+          if (!character) return;
+
+          const recentContext = comments.slice(-3).map(c => `${c.user}: ${c.text}`).join('\n');
+          const langInstruction = `Output Language: ${config.language === 'zh' ? 'Chinese' : config.language === 'ja' ? 'Japanese' : 'English'}`;
+          
+          const systemPrompt = `You are playing the role of a live streamer.
+          Character: ${character.name}.
+          Personality: ${character.personality}.
+          Stream Topic: ${activeStream.topic}.
+          Current Stats: ${stats.viewers} viewers.
+          
+          Task: React to the recent comments or continue discussing the topic.
+          Rules:
+          1. Keep response very short (max 20 words).
+          2. Act naturally as a streamer talking to chat.
+          3. ${langInstruction}.
+          
+          Recent Comments:
+          ${recentContext || '(No comments yet)'}`;
+
+          let responseText = "";
+          
+          if (config.provider === 'gemini') {
+             const url = `${config.apiEndpoint}/${config.model}:generateContent?key=${config.apiKey}`;
+             const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ role: 'user', parts: [{ text: systemPrompt }] }]
+                })
+             });
+             const data = await res.json();
+             responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          } else {
+             const res = await fetch(`${config.apiEndpoint}/chat/completions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.apiKey}` },
+                body: JSON.stringify({
+                    model: config.model,
+                    messages: [{ role: 'system', content: systemPrompt }]
+                })
+             });
+             const data = await res.json();
+             responseText = data.choices?.[0]?.message?.content;
+          }
+
+          if (responseText) {
+              setStreamContentLog(prev => [...prev.slice(-4), responseText]);
+              addComment(character.name, responseText, 'host');
+          }
+
+      } catch (e) {
+          console.error("AI Host Error:", e);
+      } finally {
+          isGeneratingRef.current = false;
+      }
+  };
+
   useEffect(() => {
     if (view === 'room') {
         streamTimer.current = setInterval(() => setStats(prev => ({...prev, duration: prev.duration + 1, viewers: prev.viewers + Math.floor(Math.random() * 10 - 3)})), 1000);
@@ -303,12 +358,10 @@ export default function OmniLiveApp({ config, setConfig, theme, currentWorld, la
             if (type === 'fan') { setStats(p => ({ ...p, likes: p.likes + 1 })); triggerHeart(); }
         }, 1500);
         
-        npcActionTimer.current = setInterval(() => {
-             if (streamerMode === 'npc') {
-                 const action = NPC_ACTIONS_POOL[Math.floor(Math.random() * NPC_ACTIONS_POOL.length)];
-                 setStreamContentLog(prev => [...prev.slice(-4), `[Action]: ${action}`]);
-             }
-        }, 8000);
+        // AI Host Loop (10s interval)
+        if (streamerMode === 'npc') {
+            npcActionTimer.current = setInterval(callAiHost, 10000);
+        }
 
     } else {
         clearInterval(streamTimer.current);
@@ -320,7 +373,7 @@ export default function OmniLiveApp({ config, setConfig, theme, currentWorld, la
         clearInterval(commentTimer.current);
         clearInterval(npcActionTimer.current);
     };
-  }, [view, allowHaters, streamerMode, config.language]);
+  }, [view, allowHaters, streamerMode, config.language, activeStream, comments]); // Added deps for AI access
 
   const handleSendChat = () => {
       if (!chatInput.trim()) return;
