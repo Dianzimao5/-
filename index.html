@@ -21,6 +21,17 @@
       ::-webkit-scrollbar-thumb:hover {
         background: rgba(156, 163, 175, 0.8);
       }
+      
+      @keyframes shake {
+        0% { transform: rotate(0deg); }
+        25% { transform: rotate(1deg); }
+        50% { transform: rotate(0deg); }
+        75% { transform: rotate(-1deg); }
+        100% { transform: rotate(0deg); }
+      }
+      .animate-shake {
+        animation: shake 0.2s infinite;
+      }
     </style>
   <script type="importmap">
 {

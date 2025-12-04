@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { Settings, ArrowLeft, Link, Palette, User, Info, Globe, Upload, Download, ToggleLeft, ToggleRight, Zap, Database, Trash2 } from 'lucide-react';
+import { Settings, ArrowLeft, Link, Palette, User, Info, Globe, Upload, Download, ToggleLeft, ToggleRight, Zap, Database, Trash2, AlertTriangle, RefreshCcw, Package } from 'lucide-react';
 import { Theme, AppConfig, AssistantConfig } from '../types';
-import { PRESET_THEMES } from '../constants';
+import { PRESET_THEMES, DEFAULT_APP_CONFIG } from '../constants';
 
 interface Props {
   config: AppConfig;
@@ -12,12 +12,16 @@ interface Props {
   uiThemes: Record<string, Theme>;
   setUiThemes: React.Dispatch<React.SetStateAction<Record<string, Theme>>>;
   langText: Record<string, string>;
+  onReset?: () => void;
+  installedApps?: string[];
+  onUninstallApp?: (id: string) => void;
 }
 
-const SettingsApp: React.FC<Props> = ({ config, setConfig, theme, uiThemes, setUiThemes, langText }) => {
+const SettingsApp: React.FC<Props> = ({ config, setConfig, theme, uiThemes, setUiThemes, langText, onReset, installedApps = [], onUninstallApp }) => {
   const [subView, setSubView] = useState('main'); 
   const themeInputRef = useRef<HTMLInputElement>(null);
   const backupInputRef = useRef<HTMLInputElement>(null);
+  const [resetConfirm, setResetConfirm] = useState(false);
 
   const cardClass = `p-4 rounded-xl border ${theme.id === 'night' ? 'border-cyan-900 bg-cyan-950/30 text-cyan-50' : 'border-gray-200 bg-white/60 text-gray-700'} h-full overflow-y-auto`;
   const inputClass = `w-full p-2 rounded border text-sm outline-none ${theme.id === 'night' ? 'bg-gray-900 border-cyan-800 text-cyan-50 placeholder-cyan-800' : 'bg-transparent border-gray-300'}`;
@@ -72,14 +76,13 @@ const SettingsApp: React.FC<Props> = ({ config, setConfig, theme, uiThemes, setU
     });
     // Include current state just in case
     backup['timestamp'] = new Date().toISOString();
-    downloadJson(backup, `OmniTerminal_Backup_${new Date().toISOString().slice(0,10)}.json`);
+    downloadJson(backup, `OmniTerminal_Backup_${new Date().toISOString().slice(0,10)}.omni`);
   };
 
   const handleImportAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!confirm(langText.sys_import_confirm)) return;
-
+    
     const reader = new FileReader();
     reader.onload = (ev) => {
         try {
@@ -96,10 +99,13 @@ const SettingsApp: React.FC<Props> = ({ config, setConfig, theme, uiThemes, setU
     reader.readAsText(file);
   };
 
-  const handleResetAll = () => {
-      if (confirm(langText.sys_reset_confirm)) {
-        localStorage.clear();
-        window.location.reload();
+  const handleResetSettings = () => {
+      if (resetConfirm) {
+        // Trigger full reset via parent prop
+        if (onReset) onReset();
+      } else {
+        setResetConfirm(true);
+        setTimeout(() => setResetConfirm(false), 3000);
       }
   };
 
@@ -150,9 +156,9 @@ const SettingsApp: React.FC<Props> = ({ config, setConfig, theme, uiThemes, setU
         </div>
         <div className="grid grid-cols-2 gap-3 border-t pt-4 border-current/10">
              <button onClick={() => themeInputRef.current?.click()} className={actionBtnClass}><Upload size={14}/> {langText.theme_import}</button>
-             <button onClick={() => downloadJson(PRESET_THEMES.simple, 'theme_template.json')} className={actionBtnClass}><Download size={14}/> {langText.theme_tpl}</button>
+             <button onClick={() => downloadJson(PRESET_THEMES.simple, 'theme_template.omni')} className={actionBtnClass}><Download size={14}/> {langText.theme_tpl}</button>
         </div>
-        <input type="file" ref={themeInputRef} onChange={handleThemeImport} accept=".json" className="hidden" />
+        <input type="file" ref={themeInputRef} onChange={handleThemeImport} accept=".omni" className="hidden" />
     </div>
   );
 
@@ -196,13 +202,37 @@ const SettingsApp: React.FC<Props> = ({ config, setConfig, theme, uiThemes, setU
                 <div className={`p-4 rounded-xl border flex flex-col gap-2 ${theme.id==='night'?'border-cyan-800 bg-cyan-900/10':'border-gray-200 bg-white'}`}>
                     <h4 className="font-bold text-sm">{langText.sys_import_all}</h4>
                     <button onClick={() => backupInputRef.current?.click()} className={actionBtnClass}><Upload size={14}/> {langText.import}</button>
-                    <input type="file" ref={backupInputRef} onChange={handleImportAll} accept=".json" className="hidden" />
+                    <input type="file" ref={backupInputRef} onChange={handleImportAll} accept=".omni" className="hidden" />
                 </div>
 
-                <div className="pt-8 border-t border-red-500/20">
-                     <button onClick={handleResetAll} className={`w-full p-3 rounded-lg border text-red-500 hover:bg-red-500/10 border-red-500/50 flex items-center justify-center gap-2 font-bold text-xs`}>
-                        <Trash2 size={16}/> {langText.sys_reset}
-                     </button>
+                {/* App Management Section */}
+                <div className={`p-4 rounded-xl border flex flex-col gap-2 ${theme.id==='night'?'border-cyan-800 bg-cyan-900/10':'border-gray-200 bg-white'}`}>
+                    <h4 className="font-bold text-sm">{langText.sys_app_manage}</h4>
+                    {installedApps.filter(app => !['assistant', 'settings', 'store'].includes(app)).map(app => (
+                        <div key={app} className="flex justify-between items-center text-xs font-bold p-2 bg-black/5 rounded">
+                            <span className="capitalize">{app}</span>
+                            <button 
+                                onClick={() => onUninstallApp && onUninstallApp(app)} 
+                                className="text-red-500 hover:text-red-700 p-1"
+                            >
+                                <Trash2 size={14}/>
+                            </button>
+                        </div>
+                    ))}
+                    {installedApps.filter(app => !['assistant', 'settings', 'store'].includes(app)).length === 0 && (
+                        <div className="text-[10px] opacity-50 italic text-center">No removable apps installed</div>
+                    )}
+                </div>
+
+                <div className="pt-6 border-t border-red-500/10 space-y-3">
+                     {/* Unified Reset */}
+                     <div>
+                        <button onClick={handleResetSettings} className={`w-full p-3 rounded-lg border flex items-center justify-center gap-2 font-bold text-xs transition-all duration-200 ${resetConfirm ? 'bg-red-600 text-white border-red-600' : 'text-red-500 hover:bg-red-500/10 border-red-500/50'}`}>
+                            {resetConfirm ? <AlertTriangle size={16} className="animate-pulse"/> : <RefreshCcw size={16}/>}
+                            {resetConfirm ? langText.sys_reset_confirm : langText.sys_reset}
+                        </button>
+                        <p className="text-[10px] opacity-50 text-center mt-1 text-red-500/70">{langText.sys_reset_desc}</p>
+                     </div>
                 </div>
            </div>
       </div>

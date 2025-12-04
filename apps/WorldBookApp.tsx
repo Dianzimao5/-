@@ -129,10 +129,10 @@ const WorldBookApp: React.FC<Props> = ({ currentWorld, setCurrentWorld, savedWor
                     <button onClick={() => fileInputRef.current?.click()} className={`flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full border ${theme.id==='night'?'border-cyan-600 text-cyan-400 hover:bg-cyan-900/50':'border-gray-300 text-gray-600 hover:bg-gray-100'}`}>
                         <Upload size={14}/> {langText.wb_import_world}
                     </button>
-                    <button onClick={() => downloadJson(currentWorld, `${currentWorld.metadata.name}_export.json`)} className={`flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full border ${theme.id==='night'?'border-cyan-600 text-cyan-400 hover:bg-cyan-900/50':'border-gray-300 text-gray-600 hover:bg-gray-100'}`}>
+                    <button onClick={() => downloadJson(currentWorld, `${currentWorld.metadata.name}_export.omni`)} className={`flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full border ${theme.id==='night'?'border-cyan-600 text-cyan-400 hover:bg-cyan-900/50':'border-gray-300 text-gray-600 hover:bg-gray-100'}`}>
                         <Download size={14}/> {langText.wb_export_world}
                     </button>
-                    <input type="file" ref={fileInputRef} onChange={handleImportWorld} accept=".json" className="hidden" />
+                    <input type="file" ref={fileInputRef} onChange={handleImportWorld} accept=".omni" className="hidden" />
                 </div>
             </div>
         </div>

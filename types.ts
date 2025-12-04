@@ -63,6 +63,7 @@ export interface Contact {
   isPlayer?: boolean;
   bgImage?: string;
   tags?: string[];
+  language?: 'auto' | 'zh' | 'en' | 'ja'; // Added Language Override
 }
 
 export interface Group {

@@ -72,7 +72,11 @@ const AssistantApp: React.FC<Props> = ({ config, assistant, setAssistant, savedW
     setIsLoading(true);
 
     try {
-        let systemPromptText = `[System Assistant]: ${assistant.name}\n${assistant.systemPrompt}`;
+        // Enforce Language
+        const langName = config.language === 'zh' ? 'Simplified Chinese (简体中文)' : config.language === 'ja' ? 'Japanese (日本語)' : 'English';
+        const langInstruction = `\n[System]: You MUST reply in ${langName} regardless of user input language, unless explicitly asked to translate.`;
+
+        let systemPromptText = `[System Assistant]: ${assistant.name}\n${assistant.systemPrompt}${langInstruction}`;
         if (config.useGlobalProfile) {
             systemPromptText += `\n[User]: ${config.userProfile.name} (UID: ${config.userProfile.uid || 'Unknown'}) (${config.userProfile.likes})`;
         }
